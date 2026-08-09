@@ -186,6 +186,15 @@
   .bootskel .skel-btn{height:48px;border-radius:14px;margin-top:16px}
   @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
   @media(prefers-reduced-motion:reduce){.bootskel .skel{animation:none}}
+  /* The searchable pickers — the service list and the add-on list. Rows, not a <select>:
+     a native select on a phone hides the price, and the price is the point. */
+  .picklist{max-height:46vh;overflow-y:auto;margin-top:10px}
+  .pick{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
+    text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    min-height:52px;padding:9px 13px;margin-bottom:7px;font-family:inherit;font-size:14.5px;
+    font-weight:800;color:var(--ink);cursor:pointer}
+  .pick:disabled{opacity:.55}
+  .pick .quiet{font-weight:700;font-size:12.5px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -430,7 +439,13 @@ function chairCard(v){
     + '<p class="lede">Tell the front desk anything that changes what she pays or how long '
     + 'she needs. They see it within seconds.</p>';
 
-  h += (v.nameOnly ? '' : photosHtml());
+  /* Photos for EVERY visit, including a walk-in who gave no number. techPhoto_ files them
+     against the visit key, not against a phone, so hiding these was the UI inventing a limit
+     the server does not have — and it left her with a "Rate the visit" button that could
+     only ever refuse, because rating requires the photos she was never allowed to take. */
+  h += photosHtml();
+  h += colourHtml(v);
+  h += svcHtml(v);
 
   h += '<div class="lbl">Need more time?</div><div class="sigrow">'
     + [10,15,30].map(function(m){
@@ -461,19 +476,17 @@ function chairCard(v){
 
   var got = (S.card && S.card.photos) || {};
   if (v.state === 'finished'){
-    var missing = REQ.filter(function(l){ return !got[l]; });
     h += (S.card && S.card.rated)
       ? '<div class="lbl">Your rating</div><p class="lede" style="margin:0">'
         + 'Saved: <span class="stars">'+'★★★★★'.slice(0,S.card.rated.stars)+'</span></p>'
-      : (missing.length && !v.nameOnly
-          ? '<button class="btn" disabled style="margin-top:14px">Still needed: '+missing.join(', ')+'</button>'
-          : '<button class="btn" style="margin-top:14px" onclick="openRating()">'+ICON.star+'Rate the visit</button>');
+      : '<button class="btn" style="margin-top:14px" onclick="openRating()">'+ICON.star+'Rate the visit</button>';
   } else {
-    /* The Before photo gates finishing. It is the one that cannot be taken afterwards, so
-       the button says why rather than sitting dead. */
-    var noBefore = !got.Before && !v.nameOnly;
-    h += '<button class="btn" id="finish" style="margin-top:14px"'+(noBefore?' disabled':'')+'>'
-      + (noBefore ? 'Take the before photo first' : 'She is finished') + '</button>';
+    /* All three, not just the before photo — and the same three the SERVER checks, so the
+       button and the refusal can never disagree. The button says what is outstanding rather
+       than sitting dead with no explanation. */
+    var short = missingBits(v);
+    h += '<button class="btn" id="finish" style="margin-top:14px"'+(short.length?' disabled':'')+'>'
+      + (short.length ? 'Still needed: ' + short.join(', ') : 'She is finished') + '</button>';
   }
   return h + '</div>';
 }
@@ -519,6 +532,132 @@ function cardHtml(){
 /* THE THREE PHOTOS THAT ARE NOT OPTIONAL. Before proves what she walked in with; After and
    Colour are what the next technician needs when she comes back in five weeks. */
 var REQ = ['Before','After','Colour'];
+
+/* What is still outstanding before this visit can be closed. Mirrors finishBlockers_ on the
+   server word for word — the browser is a courtesy, the server is the rule. */
+function missingBits(v){
+  var got = (S.card && S.card.photos) || {}, out = [];
+  if (!got.Before) out.push('the before photo');
+  if (!got.After)  out.push('the after photo');
+  if (!(S.card && S.card.colour)) out.push('the colour she had');
+  return out;
+}
+
+/* ── WHAT COLOUR SHE HAD ────────────────────────────────────────────────────
+   A photograph of the colour is not a record of it. This is the bit a returning client
+   actually asks for by name. */
+function colourHtml(v){
+  var done = S.card && S.card.colour;
+  return '<div class="lbl">The colour she had</div>'
+    + (done
+        ? '<div class="note"><b>'+esc(done)+'</b><br>'
+          + '<button class="linkbtn" onclick="openColour()">Change it</button></div>'
+        : '<button class="sigbtn" style="width:100%" onclick="openColour()">'
+          + ICON.plus+'Record the colour</button>');
+}
+function openColour(){
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert"><h3>The colour she had</h3>'
+    + '<p class="lede">Brand and shade, so the next person can match it without guessing.</p>'
+    + '<input class="in" id="colbrand" placeholder="Brand (OPI, Gelish…)" autocomplete="off">'
+    + '<input class="in" id="colname" placeholder="Shade name or number" autocomplete="off" style="margin-top:8px">'
+    + '<button class="btn" id="colgo" style="margin-top:12px">Save the colour</button>'
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Not now</button></div>';
+  $('colgo').onclick = function(){
+    var name = ($('colname').value||'').trim();
+    if (!name) return toast('Which colour? At least the name or number.','err');
+    var b = $('colgo'); b.disabled = true; b.innerHTML = 'Saving…';
+    api('techColour', { token:S.token, key:S.key, brand:($('colbrand').value||'').trim(), name:name })
+      .then(function(r){
+        shutVeil(); toast('Colour saved — ' + r.label);
+        /* Re-read the card so the finish gate sees it immediately — otherwise she saves the
+           colour and the button still tells her it is missing. */
+        return api('techClient', { token:S.token, key:S.key });
+      })
+      .then(function(c){ if (c) { S.card = c; render(); } })
+      ['catch'](function(e){ b.disabled = false; b.innerHTML = 'Save the colour'; toast(e.message,'err'); });
+  };
+}
+
+/* ── CHANGING THE SERVICE, FROM THE CHAIR ───────────────────────────────────
+   The permission existed and there was nothing behind it. Searchable, like the desk's, and
+   the price comes from the server's copy of the menu — never from this screen. */
+function svcHtml(v){
+  if (!can('tech.serviceChange')) return '';
+  return '<div class="lbl">What she is having</div>'
+    + '<div class="note" style="margin-bottom:8px"><b>'+esc(v.svc||'—')+'</b>'
+    + (v.price?' · '+money(v.price):'')
+    + ((v.addons&&v.addons.length)
+        ? '<br><span class="quiet">'+v.addons.map(function(a){ return esc(a.label||a.name); }).join(' · ')+'</span>'
+        : '')
+    + '</div><div class="sigrow">'
+    + '<button class="sigbtn" onclick="openSvc()">'+ICON.plus+'Change the service</button>'
+    + '<button class="sigbtn" onclick="openAddon()">'+ICON.plus+'Add an add-on</button></div>';
+}
+var MENU = null;
+function withMenu(then){
+  if (MENU) return then(MENU);
+  api('menu', { token:S.token }).then(function(r){ MENU = r; then(r); })
+    ['catch'](function(e){ toast(e.message,'err'); });
+}
+function openSvc(){
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
+    + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
+    + '<div id="svclist" class="picklist"><p class="lede">Loading the menu&hellip;</p></div>'
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+  withMenu(function(m){
+    function paint(){
+      var q = ($('svcq').value||'').trim().toLowerCase();
+      var hits = m.services.filter(function(s){
+        return !q || s.name.toLowerCase().indexOf(q) >= 0 || s.group.toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 40);
+      $('svclist').innerHTML = hits.length
+        ? hits.map(function(s){
+            return '<button class="pick" data-svc="'+esc(s.name)+'">'
+              + '<b>'+esc(s.name)+'</b><span class="quiet">'+esc(s.group)+' · '+money(s.price)+'</span></button>';
+          }).join('')
+        : '<p class="lede">Nothing matches. Ask the front desk.</p>';
+      Array.prototype.forEach.call($('svclist').querySelectorAll('[data-svc]'), function(b){
+        b.onclick = function(){
+          var to = b.getAttribute('data-svc');
+          b.disabled = true; b.textContent = 'Sending…';
+          api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to } })
+            .then(function(){ shutVeil(); toast('The desk has it — '+to); refresh(true); })
+            ['catch'](function(e){ toast(e.message,'err'); paint(); });
+        };
+      });
+    }
+    $('svcq').oninput = paint; paint(); $('svcq').focus();
+  });
+}
+function openAddon(){
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
+    + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+  withMenu(function(m){
+    $('addlist').innerHTML = (m.addons||[]).map(function(a){
+      return '<div class="row2" style="margin-top:8px">'
+        + '<button class="pick" data-add="'+esc(a.name)+'" style="flex:1"><b>'+esc(a.label)+'</b>'
+        + '<span class="quiet">'+(a.price?money(a.price)+(a.per?' per '+a.per:''):'no extra charge')+'</span></button>'
+        + (a.per ? '<input class="in" style="width:74px;margin:0" type="text" inputmode="numeric" '
+                 + 'pattern="[0-9]*" value="1" id="q_'+esc(a.name).replace(/\W/g,'')+'">' : '')
+        + '</div>';
+    }).join('');
+    Array.prototype.forEach.call($('addlist').querySelectorAll('[data-add]'), function(b){
+      b.onclick = function(){
+        var name = b.getAttribute('data-add');
+        var qf = $('q_'+name.replace(/\W/g,''));
+        b.disabled = true;
+        api('signal', { token:S.token, key:S.key, kind:'ADDON',
+                        payload:{ name:name, qty: qf ? Number(qf.value)||1 : 1 } })
+          .then(function(){ shutVeil(); toast('Added — the desk has it'); refresh(true); })
+          ['catch'](function(e){ b.disabled=false; toast(e.message,'err'); });
+      };
+    });
+  });
+}
 function photosHtml(){
   var got = (S.card && S.card.photos) || {}, thumb = S.thumbs || {};
   return '<div class="lbl">Photos of this visit — required</div><div class="sigrow">'
@@ -667,6 +806,13 @@ function openCompose(kind){
           + '<div class="sigrow">'+g.items.map(function(t){
               return '<button class="rchip" data-chip="'+esc(t)+'">'+esc(t)+'</button>'; }).join('')+'</div>';
       }).join('')+'</div>'
+    + (mk ? '<div class="lbl">What kind of thing is it?</div><div class="sigrow" id="cclass">'
+        + [['allergy','Allergy or reaction'],['care','How to treat her'],['other','Something else']]
+            .map(function(c, i){
+              return '<button class="rchip'+(i===0?' on':'')+'" data-cls="'+c[0]+'">'+esc(c[1])+'</button>';
+            }).join('')
+        + '</div><p class="hint" style="margin:-4px 0 8px">An allergy is shown in red at the top of '
+        + 'her card, to everyone, every visit.</p>' : '')
     + '<div class="lbl">'+(mk?'In your words — required':'Anything else')+'</div>'
     + '<textarea class="ta" id="ctext" rows="3" placeholder="'
     + (mk?'e.g. Reacts to acetone — use the gentle remover':'What she asked for, what worked…')+'"></textarea>'
@@ -681,6 +827,18 @@ function openCompose(kind){
       syncCompose();
     };
   });
+  /* The class chips are single-choice — a thing is an allergy or it is not. */
+  if ($('cclass')){
+    COMP.cls = 'allergy';
+    Array.prototype.forEach.call($('cclass').querySelectorAll('[data-cls]'), function(b){
+      b.onclick = function(){
+        COMP.cls = b.getAttribute('data-cls');
+        Array.prototype.forEach.call($('cclass').querySelectorAll('[data-cls]'), function(o){
+          o.className = 'rchip' + (o === b ? ' on' : '');
+        });
+      };
+    });
+  }
   $('ctext').oninput = syncCompose;
   $('csave').onclick = saveCompose;
   syncCompose();
@@ -697,6 +855,9 @@ function saveCompose(){
   var mk = COMP.kind==='mk';
   api(mk?'techMustKnow':'techNote',
       { token:S.token, key:S.key, chips:chips, text:txt,
+        /* cls was never sent, so a technician could not raise an allergy — every must-know
+           she wrote arrived as "other" and never showed in red at the top of the card. */
+        cls: mk ? (COMP.cls || 'other') : '',
         opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
     shutVeil(); toast(ICON.check+' Saved to her card.');
     return api('techClient', { token:S.token, key:S.key });
@@ -832,7 +993,11 @@ function evText(e){
   switch(e.type){
     case 'WALKIN_ADD': return 'Walk-in <b>'+esc(p.name)+'</b> added'+(p.at?' at '+esc(p.at):'');
     case 'SVC_CHANGE': return nm+' service '+ba(p.from?p.from+' · '+money(p.fromPrice):'', p.to+' · '+money(p.price));
-    case 'ADDON':      return nm+' add-on <b>'+esc(p.label||p.name)+'</b>';
+    /* Before -> after, like every other change to what she pays. The server has always sent
+       fromPrice and toPrice; this line printed the label and threw the numbers away, so the
+       one update that silently raises a bill was the one that did not show it. */
+    case 'ADDON':      return nm+' add-on <b>'+esc(p.label||p.name)+'</b>'
+                       + (p.toPrice ? ' ' + ba(money(p.fromPrice), money(p.toPrice)) : '');
     case 'DESIGN_BRIEF': return nm+' — <b>the design she wants</b> is on her card';
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
     default: return nm+' '+esc(e.type.toLowerCase().replace(/_/g,' '));
