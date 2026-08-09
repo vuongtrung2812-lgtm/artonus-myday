@@ -1,0 +1,16 @@
+{
+  "name": "Artonus — My Day",
+  "short_name": "My Day",
+  "description": "Your chair, your clients, and what the front desk needs you to know.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF8F5",
+  "theme_color": "#FBF8F5",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

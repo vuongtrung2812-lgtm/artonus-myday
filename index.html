@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- WITHOUT THIS TAG A PHONE DOES NOT RENDER A PHONE LAYOUT.
+     Mobile Safari lays an unmarked page out at 980px CSS pixels and then scales the whole
+     thing down to fit, so every word and every button comes out about a third of its
+     intended size. The app was never sized for a phone; it was a desktop page being
+     shrunk. viewport-fit=cover lets the ivory run under the notch and the home bar, which
+     is what the safe-area padding below is compensating for. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Added to the Home Screen this opens with no browser chrome — no address bar, no tabs.
+     That is the difference between "a website the salon uses" and "the salon's app". -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="My Day">
+<meta name="theme-color" content="#FBF8F5">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
 <title>Artonus — My Day</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +37,16 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;background:var(--ivory);color:var(--ink);
     font-family:Lato,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.55}
-  body{padding:0 16px calc(24px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
+  /* min-height 100% + the ivory on html: without it a short screen (the code entry, an empty
+     morning) leaves the page background showing below the content, which reads as a broken
+     half-drawn page rather than an app. */
+  html{min-height:100%;-webkit-text-size-adjust:100%}
+  body{min-height:100vh;min-height:100dvh;
+       padding:calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+               calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+       max-width:520px;margin:0 auto;
+       /* A standalone app must not rubber-band like a web page. */
+       overscroll-behavior-y:none}
   h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;color:var(--espresso);margin:0}
   .hdr{text-align:center;padding:18px 0 10px}
   .hdr img{height:26px;opacity:.92}
@@ -145,7 +172,8 @@
   .quiet{color:var(--muted)}
   .mtnum::-webkit-outer-spin-button,.mtnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   #offline{position:fixed;left:0;right:0;top:0;z-index:99;background:#8a1c1c;color:#fff;
-    font-size:12.5px;font-weight:800;text-align:center;padding:7px 12px}
+    font-size:12.5px;font-weight:800;text-align:center;
+    padding:calc(7px + env(safe-area-inset-top)) 12px 7px}
 </style>
 </head>
 <body>
