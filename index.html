@@ -277,7 +277,9 @@ function loadDay(){
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
     if (S.session !== s) return;
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
-    absorb(r);
+    /* quiet: whatever happened before she opened the app is history. It is all in the bell,
+       and the count is on the badge; what it must not be is a modal over her first screen. */
+    absorb(r, true);
     S.view='today'; render(); paintAlert(); refreshBell();
     poll();
   })['catch'](function(e){
@@ -897,23 +899,41 @@ document.addEventListener('visibilitychange', function(){
  * refreshing it both do this, and the day they disagree is the day an alert is shown twice
  * or not at all.
  */
-function absorb(r){
-  /* A NEW DAY STARTS CLEAN. Day-event ids restart at 1 every morning, so a phone left open
-     overnight holds yesterday's cursor, `id > since` hides today's opening events, and the
-     feed silently begins the day already behind. */
+/**
+ * What a techPoll answer means for the feed. One place, because opening the app and
+ * refreshing it both do this and the day they disagree is the day an alert is shown twice or
+ * not at all.
+ *
+ * Returns TRUE when the day rolled over, meaning the caller must fetch again from zero.
+ * Resetting the cursor here is not enough on its own: this response was already filtered
+ * server-side against YESTERDAY's cursor, and `S.cursor = r.cursor` below would immediately
+ * put the cursor back at today's newest id — so the morning's first events would be skipped
+ * exactly as before. The reset only counts if a fresh request follows it.
+ *
+ * `quiet` is for opening the app. The day's history belongs in the bell, not in a full-screen
+ * modal — a technician who reloads at two in the afternoon should not have to dismiss every
+ * update since nine.
+ */
+function absorb(r, quiet){
   if (r && r.date && S.day && r.date !== S.day){
     S.cursor = 0; FEED.length = 0; S.seen = {}; S.shownIds = [];
+    S.day = r.date;
+    return true;                  // caller refetches; next time round S.day matches, so once only
   }
   if (r && r.date) S.day = r.date;
 
   if (r && r.events && r.events.length){
-    r.events.filter(mine).forEach(function(e){ FEED.push(e); });
+    r.events.filter(mine).forEach(function(e){
+      FEED.push(e);
+      if (quiet) S.seen[e.id] = true;   // already history when she opened the app
+    });
     S.cursor = r.cursor;
-    pollHot();                    // the salon is doing something; stay close for a while
+    if (!quiet) pollHot();        // the salon is doing something; stay close for a while
   } else {
     if (r && r.cursor) S.cursor = r.cursor;
-    pollCool();                   // nothing happening; give the quota back
+    pollCool();                   // nothing happening; ease off
   }
+  return false;
 }
 
 /* ONE call, not two. This used to ask techToday and then dayFeed, which is two executions
@@ -923,7 +943,7 @@ function refresh(quiet){
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
-    absorb(r);
+    if (absorb(r)) { refresh(quiet); return; }     // the day rolled: start it from zero
     render(); paintAlert(); refreshBell();
   })['catch'](function(e){
     if (/not signed in/.test(e.message)){ dropToken(); S.token=''; S.view='enrol'; render(); return; }
