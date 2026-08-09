@@ -817,16 +817,57 @@ function refreshBell(){
   var n = unseen().length; el.textContent = n||''; el.style.display = n?'flex':'none';
 }
 
+/* ══════════════════ INSTANT, WHEN THERE IS A CHANNEL ══════════════════
+ * Apps Script cannot push, and cannot be polled fast enough to feel live: a consumer account
+ * has 90 MINUTES of script runtime a day and Rebook's sync already spends half of it. So the
+ * server rings a doorbell on an outside channel and this page holds that connection open.
+ * When it rings we call the book once — under a second, and a few hundred calls a day instead
+ * of many thousands.
+ *
+ * EventSource, not a websocket library: built into every phone browser, reconnects by itself,
+ * and adds no dependency to a page served from GitHub.
+ *
+ * With REALTIME empty everything still works on the slow poll below. The channel makes it
+ * instant; it is never what makes it function.
+ */
+var REALTIME = '';                     // e.g. https://<project>.firebaseio.com/tick.json
+var ES = null, ESFAIL = 0;
+
+function listen(){
+  if (!REALTIME || !window.EventSource || ES) return;
+  try {
+    ES = new EventSource(REALTIME + (REALTIME.indexOf('?') < 0 ? '?' : '&') + 'x=' + Date.now());
+    ES.addEventListener('put',   function(){ ESFAIL = 0; refresh(true); });
+    ES.addEventListener('patch', function(){ ESFAIL = 0; refresh(true); });
+    ES.onerror = function(){
+      /* Back off and never spin: a phone in a dead-wifi corner must not sit reopening a
+         socket for an hour. The poll keeps working throughout. */
+      try { ES.close(); } catch (e) {}
+      ES = null; ESFAIL++;
+      if (ESFAIL < 6) setTimeout(listen, Math.min(60000, 2000 * Math.pow(2, ESFAIL)));
+    };
+  } catch (e) { ES = null; }
+}
+
 /* ─────────────────────────── the poll ─────────────────────────── */
 /* Apps Script has no push. Twenty seconds while the screen is on, paused when it is not —
    a phone face-down on the station must not spend the salon's daily quota. */
-var POLL_MS = 20000, POLLT = null;
+/* With the channel open this is a safety net, not the transport: five minutes, so a missed
+   doorbell costs a delay rather than a lost message. Without it, twenty seconds — as fast as
+   the runtime budget allows. */
+var POLLT = null;
+function pollMs(){ return ES ? 300000 : 20000; }
 function poll(){
   clearTimeout(POLLT);
+  var ms = pollMs();
   POLLT = setTimeout(function(){ if (!document.hidden) refresh(true); poll(); },
-                     POLL_MS + Math.round((Math.random()-0.5)*POLL_MS*0.3));
+                     ms + Math.round((Math.random() - 0.5) * ms * 0.3));
 }
-document.addEventListener('visibilitychange', function(){ if (!document.hidden) refresh(true); });
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) return;
+  refresh(true);
+  listen();                       // a backgrounded phone usually has its socket cut
+});
 
 function refresh(quiet){
   if (!S.token) return;
@@ -858,7 +899,7 @@ setInterval(function(){ if (S.token && S.help) render(); }, 1000);
 (function boot(){
   var t = loadToken();
   if (!t){ S.view='enrol'; render(); return; }
-  S.token = t; loadDay();
+  S.token = t; loadDay(); listen();
 })();
 </script>
 </body>
