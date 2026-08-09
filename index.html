@@ -144,9 +144,12 @@
   .toast.err{background:var(--err)}
   .quiet{color:var(--muted)}
   .mtnum::-webkit-outer-spin-button,.mtnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  #offline{position:fixed;left:0;right:0;top:0;z-index:99;background:#8a1c1c;color:#fff;
+    font-size:12.5px;font-weight:800;text-align:center;padding:7px 12px}
 </style>
 </head>
 <body>
+<div id="offline" style="display:none">Not reaching the front desk — what you see may be out of date.</div>
 <div id="app"></div>
 <div class="veil" id="veil"></div>
 <div class="toast" id="toast"></div>
@@ -276,6 +279,7 @@ function loadDay(){
      feed in the same breath costs nothing extra and saves a whole round trip on open. */
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
     if (S.session !== s) return;
+    REFRESHING = false; pollTrouble(false);
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
     /* quiet: whatever happened before she opened the app is history. It is all in the bell,
        and the count is on the badge; what it must not be is a modal over her first screen. */
@@ -922,31 +926,55 @@ function absorb(r, quiet){
   }
   if (r && r.date) S.day = r.date;
 
-  if (r && r.events && r.events.length){
-    r.events.filter(mine).forEach(function(e){
-      FEED.push(e);
-      if (quiet) S.seen[e.id] = true;   // already history when she opened the app
-    });
-    S.cursor = r.cursor;
-    if (!quiet) pollHot();        // the salon is doing something; stay close for a while
-  } else {
-    if (r && r.cursor) S.cursor = r.cursor;
-    pollCool();                   // nothing happening; ease off
-  }
+  /* Kept by id. The cursor normally prevents a repeat, but a retry, a doorbell ring and a
+     poll can overlap, and the same event landing twice shows the same alert twice — which
+     reads as two clients needing something when only one does. */
+  var have = {};
+  FEED.forEach(function(e){ have[e.id] = 1; });
+
+  var fresh = (r && r.events ? r.events : []).filter(mine).filter(function(e){ return !have[e.id]; });
+  fresh.forEach(function(e){
+    FEED.push(e);
+    if (quiet) S.seen[e.id] = true;     // already history when she opened the app
+  });
+  if (r && r.cursor) S.cursor = r.cursor;
+
+  /* Hot only for things SOMEBODY ELSE did. Her own tap already refreshed the screen, and
+     letting it hold the phone at 4 seconds spends the salon's budget on nothing. */
+  var fromElsewhere = fresh.filter(function(e){ return e.who !== S.tech; });
+  if (!quiet && fromElsewhere.length) pollHot(); else pollCool();
   return false;
+}
+
+/* A poll that fails must SAY so. A frozen day and a quiet day look identical, and a
+   technician has no way to tell that the last twenty minutes of updates never arrived. */
+var POLLFAIL = 0;
+function pollTrouble(on){
+  POLLFAIL = on ? POLLFAIL + 1 : 0;
+  var el = $('offline');
+  if (!el) return;
+  el.style.display = POLLFAIL >= 3 ? 'block' : 'none';
 }
 
 /* ONE call, not two. This used to ask techToday and then dayFeed, which is two executions
    and two lots of that 0.9s — for one refresh. techPoll answers both. */
+var REFRESHING = false;
 function refresh(quiet){
-  if (!S.token) return;
+  /* One at a time. Two overlapping polls both read the cursor before either writes it, so
+     both fetch the same events and the second pushes duplicates. */
+  if (!S.token || REFRESHING) return;
+  REFRESHING = true;
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
+    REFRESHING = false;
+    pollTrouble(false);
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
     if (absorb(r)) { refresh(quiet); return; }     // the day rolled: start it from zero
     render(); paintAlert(); refreshBell();
   })['catch'](function(e){
+    REFRESHING = false;
     if (/not signed in/.test(e.message)){ dropToken(); S.token=''; S.view='enrol'; render(); return; }
+    pollTrouble(true);
     if (!quiet) toast(e.message,'err');
   });
 }
