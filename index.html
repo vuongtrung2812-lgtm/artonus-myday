@@ -175,7 +175,7 @@ var ICON = {
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
 var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[],
-          key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0 };
+          key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
@@ -894,6 +894,14 @@ document.addEventListener('visibilitychange', function(){
  * or not at all.
  */
 function absorb(r){
+  /* A NEW DAY STARTS CLEAN. Day-event ids restart at 1 every morning, so a phone left open
+     overnight holds yesterday's cursor, `id > since` hides today's opening events, and the
+     feed silently begins the day already behind. */
+  if (r && r.date && S.day && r.date !== S.day){
+    S.cursor = 0; FEED.length = 0; S.seen = {}; S.shownIds = [];
+  }
+  if (r && r.date) S.day = r.date;
+
   if (r && r.events && r.events.length){
     r.events.filter(mine).forEach(function(e){ FEED.push(e); });
     S.cursor = r.cursor;
