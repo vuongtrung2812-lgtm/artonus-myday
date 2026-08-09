@@ -860,17 +860,21 @@ function listen(){
  * and for one that reads the whole day. It is Google's dispatch, not our code, so no amount
  * of tuning on this side makes a single refresh feel instant.
  *
- * What IS ours is the daily budget: 90 minutes of script runtime, of which Rebook's sync
- * already spends about half. So the question is not "how fast can one call be" but "where
- * do we spend the calls" — and the answer is: fast while something is happening, slow while
- * nothing is.
+ * A CORRECTION worth writing down, because the first version of this comment got it wrong.
+ * The "90 minutes of script runtime a day" limit is labelled "TRIGGERS total runtime" in
+ * Google's quota table. Polling a web app does not spend it — Rebook's every-minute sync
+ * trigger does. These intervals were originally stretched to protect a budget that was
+ * never at risk.
  *
- * After anything arrives, poll every 5 seconds. Each quiet poll backs off by half again, up
- * to 45. A busy chair feels near-live; a chair with nothing happening costs almost nothing,
- * which is what pays for the busy one. Anything the technician taps snaps it back to fast.
- * A dark screen does not poll at all — a phone face-down on the station is free.
+ * What actually sets the pace: the 0.9s floor above, "simultaneous executions per user: 30"
+ * (six phones and a desk never approach it), and not hammering the spreadsheet.
+ *
+ * After anything arrives, poll every 4 seconds, backing off by half again per quiet poll to
+ * 15. Fifteen is the real number: it is the longest she can go without hearing that her
+ * client's service changed. Anything she taps snaps it back to fast, and a dark screen does
+ * not poll at all — a phone face-down on the station is free.
  */
-var POLLT = null, POLL_HOT = 5000, POLL_COLD = 45000, POLL_MS = POLL_HOT;
+var POLLT = null, POLL_HOT = 4000, POLL_COLD = 15000, POLL_MS = POLL_HOT;
 function pollHot(){ POLL_MS = POLL_HOT; poll(); }              // something happened: lean in
 function pollCool(){ POLL_MS = Math.min(POLL_COLD, Math.round(POLL_MS * 1.5)); }
 function pollMs(){ return ES ? 300000 : POLL_MS; }             // a live channel makes this a net
