@@ -756,7 +756,7 @@ function clearHelp(){ api('helpClear',{token:S.token,how:'tech'}).then(function(
 var FEED = [];
 function unseen(){ return FEED.filter(function(e){ return !S.seen[e.id]; }); }
 function evText(e){
-  var p = e.payload||{}, nm = '<b>'+esc(visitName(e.visitKey))+'</b>';
+  var p = e.payload||{}, nm = '<b>'+esc(visitName(e.rowKey))+'</b>';
   function ba(was,now){ return '<span class="ba">'+(was?'<span class="was">'+esc(was)+'</span><span class="arrow">→</span>':'')
     + '<b>'+esc(now)+'</b></span>'; }
   switch(e.type){
@@ -768,9 +768,10 @@ function evText(e){
     default: return nm+' '+esc(e.type.toLowerCase().replace(/_/g,' '));
   }
 }
-function visitName(key){
-  var v = S.visits.filter(function(x){ return x.key===key; })[0];
-  return v ? v.name : 'Your chair';   // the subject of a signal, not the app's name
+/* Events carry the hashed handle, not the raw key — so match on that. */
+function visitName(rowKey){
+  var v = S.visits.filter(function(x){ return x.rowKey === rowKey; })[0];
+  return v ? v.name : 'Your chair';
 }
 /* Only what the DESK sent her. Her own signals coming back would alert her about herself. */
 function mine(e){ return e.who !== S.tech && e.type.indexOf('HELP') !== 0; }
