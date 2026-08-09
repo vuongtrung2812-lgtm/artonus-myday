@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Artonus — My Day</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  /* House skin, unchanged from the fleet: the same ivory, espresso and gold, Cormorant for
+     names and Lato for everything you have to read fast. Line-art icons only — no emoji in
+     an Artonus UI, ever. */
+  :root{
+    --ivory:#FBF8F5; --card:#FFFDFB; --espresso:#2B0B00; --ink:#3B2A22; --muted:#8A7A6E;
+    --gold:#B0894F; --gold-soft:#F3EADF; --line:#EADFD3;
+    --ok:#3F7D5A; --ok-soft:#EEF6F0; --err:#A4392B; --err-soft:#FBEEEB; --err-line:#E8C9C2;
+    --warn:#8A6D2F; --warn-soft:#FBF3E2;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--ivory);color:var(--ink);
+    font-family:Lato,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.55}
+  body{padding:0 16px calc(24px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
+  h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;color:var(--espresso);margin:0}
+  .hdr{text-align:center;padding:18px 0 10px}
+  .hdr img{height:26px;opacity:.92}
+  .hdr h1{font-size:30px;margin-top:6px;letter-spacing:.2px}
+  .hdr .sub{font-size:10.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);margin-top:3px;font-weight:800}
+  .anav{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:4px 0 12px}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
+    border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:800;color:var(--espresso);cursor:pointer;position:relative}
+  .pill svg{width:14px;height:14px;fill:none;stroke:var(--gold);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .dot{position:absolute;top:-5px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--err);
+    color:#fff;font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:11px}
+  .card h3{font-size:21px}
+  .lede,.hint{color:var(--muted);font-size:13px;margin:4px 0 0}
+  .in,.ta{width:100%;font-family:inherit;font-size:16px;border:1px solid var(--line);border-radius:12px;
+    padding:12px 13px;background:var(--card);color:var(--ink);margin-bottom:9px}
+  .ta{resize:vertical;min-height:78px}
+  .in:focus,.ta:focus{outline:none;border-color:var(--gold)}
+  .btn{width:100%;min-height:50px;border:none;border-radius:14px;background:var(--espresso);color:#FBF8F5;
+    font-family:inherit;font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:8px}
+  .btn:disabled{opacity:.5}
+  .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ghost{background:var(--card);border:1px solid var(--line);color:var(--espresso)}
+  .skip{background:transparent;border:1px solid var(--line);color:var(--muted);min-height:44px;border-radius:12px;
+    font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;padding:0 15px;
+    display:inline-flex;align-items:center;justify-content:center;gap:7px}
+  /* EVERY icon, sized and stroked, once. An SVG that misses its rule renders at the
+     browser's default box with a filled path — which is how "Send" became a black blob. */
+  button svg,.pill svg,.tag svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
+    stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .btn svg{width:17px;height:17px}
+  .sigbtn svg,.pill svg{stroke:var(--gold)}
+  .sigbtn.sent svg,.hstate svg,.btn svg{stroke:currentColor}
+  .helpbtn svg{width:18px;height:18px;stroke:var(--err)}
+  .row2{display:flex;gap:8px;margin-top:8px}
+  .lbl{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;font-weight:900;color:var(--muted);margin:14px 0 6px}
+  .sigrow{display:flex;flex-wrap:wrap;gap:7px}
+  .sigbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;min-height:44px;padding:0 13px;font-family:inherit;font-size:13.5px;font-weight:800;
+    color:var(--espresso);cursor:pointer}
+  .sigbtn svg{width:15px;height:15px;fill:none;stroke:var(--gold);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .sigbtn:disabled{opacity:.55}
+  .sigbtn.sent{background:var(--ok);border-color:var(--ok);color:#fff}
+  .sigbtn.sent svg{stroke:#fff}
+  /* A note is a record of today; a must-know is a lasting fact about her care. Two adjacent
+     buttons that do different things must not look identical. */
+  .sigbtn.mk{background:var(--gold-soft);border-color:#E7D6BE}
+  /* A taken photo becomes the tile. Retake is the smaller, second tap — the common action
+     once it is shot is looking at it, not replacing it. */
+  .shot{display:flex;flex-direction:column;gap:4px}
+  .shotbtn{width:100%;min-height:74px;border:1px solid var(--ok);border-radius:12px;cursor:pointer;
+    background:var(--ok-soft) center/cover no-repeat;position:relative;overflow:hidden;
+    display:flex;align-items:flex-end;justify-content:center;padding:0}
+  .shotbtn .cap{width:100%;background:linear-gradient(to top,rgba(43,11,0,.72),rgba(43,11,0,0));
+    color:#fff;font-size:11px;font-weight:900;letter-spacing:.6px;padding:12px 0 4px}
+  .retake{background:none;border:none;color:var(--muted);font-family:inherit;font-size:11px;
+    font-weight:800;cursor:pointer;padding:2px;text-decoration:underline}
+  .rchip{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px dashed var(--line);
+    border-radius:999px;min-height:38px;padding:0 13px;font-family:inherit;font-size:13px;font-weight:800;
+    color:var(--muted);cursor:pointer}
+  .rchip.on{background:var(--espresso);border:1px solid var(--espresso);color:#FBF8F5}
+  .rchip svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+  .visit{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:13px;margin-bottom:9px;cursor:pointer}
+  .visit .t{font-weight:900;font-size:13px;color:var(--espresso);min-width:62px}
+  .visit .nm{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--espresso);line-height:1.15}
+  .visit .sv{font-size:12.5px;color:var(--muted)}
+  .tag{display:inline-block;font-size:10px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;
+    border-radius:999px;padding:3px 9px;margin-top:4px}
+  .tag.book{background:var(--gold-soft);color:var(--warn)}
+  .tag.serv{background:var(--ok-soft);color:var(--ok)}
+  .tag.done{background:var(--line);color:var(--muted)}
+  .tag.walk{background:var(--warn-soft);color:var(--warn)}
+  .flag{background:var(--err-soft);border:1px solid var(--err-line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+  .flag .k{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;font-weight:900;color:var(--err)}
+  .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px;font-size:13.5px}
+  .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0}
+  .c{display:inline-block;background:var(--gold-soft);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;color:var(--espresso)}
+  .stars{color:var(--gold);letter-spacing:2px}
+  /* THE ALERT — centred, everything behind it dimmed, and it stays until acknowledged. */
+  .veil{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:18px;
+    background:rgba(43,11,0,.55);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .veil.on{display:flex}
+  .alert{background:var(--card);border-radius:18px;padding:18px 17px 16px;width:100%;max-width:340px;
+    box-shadow:0 22px 60px rgba(43,11,0,.45);max-height:84vh;overflow:auto}
+  .alert .hd{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;
+    font-weight:900;color:var(--gold);margin-bottom:10px}
+  .alert .hd svg{width:14px;height:14px;fill:none;stroke:var(--gold);stroke-width:2}
+  .alert .item{border-top:1px solid var(--line);padding:9px 0;font-size:13.5px;line-height:1.5}
+  .alert .item:first-of-type{border-top:none;padding-top:2px}
+  .alert .item .who{font-size:11px;color:var(--muted);margin-top:2px}
+  .alert .item.fresh{background:var(--gold-soft);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:8px}
+  .alert .newline{font-size:11.5px;color:var(--gold);font-weight:800;margin-top:8px}
+  .ba .was{color:var(--muted);text-decoration:line-through}
+  .ba .arrow{color:var(--gold);font-weight:900}
+  /* Help: her own dock, always reachable, never mixed with routine signals. */
+  .dock{position:sticky;bottom:0;margin:16px -16px 0;padding:12px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top,var(--ivory) 74%,rgba(251,248,245,0));z-index:40}
+  .helpbtn{width:100%;border:1.5px solid var(--err-line);background:var(--err-soft);color:var(--err);
+    border-radius:14px;min-height:52px;font-family:inherit;font-size:15px;font-weight:900;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .helpbtn svg{width:18px;height:18px;fill:none;stroke:var(--err);stroke-width:2.2;stroke-linecap:round}
+  .hstate{border-radius:14px;padding:11px 13px;font-size:13px}
+  .hstate.wait{background:var(--err);color:#fff}
+  .hstate.coming{background:var(--ok);color:#fff}
+  .hstate .r{display:flex;align-items:center;gap:8px}
+  .hstate .r b{font-size:14px}
+  .hstate .t2{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:900}
+  .hstate svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round}
+  .hstate button{width:100%;margin-top:8px;border:none;border-radius:10px;min-height:38px;font-family:inherit;
+    font-size:12.5px;font-weight:900;cursor:pointer;background:rgba(255,255,255,.92);color:var(--err)}
+  .hstate.coming button{color:var(--ok)}
+  .hstate .cr{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .hstate .cr button{width:auto;margin:0;background:rgba(255,255,255,.16);color:#fff;
+    border:1px solid rgba(255,255,255,.35);border-radius:16px;min-height:32px;padding:0 11px;font-size:11.5px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom));
+    background:var(--espresso);color:#FBF8F5;padding:11px 16px;border-radius:12px;font-size:13.5px;font-weight:700;
+    z-index:200;display:none;max-width:calc(100% - 32px);box-shadow:0 12px 30px rgba(43,11,0,.35)}
+  .toast.on{display:block}
+  .toast.err{background:var(--err)}
+  .quiet{color:var(--muted)}
+  .mtnum::-webkit-outer-spin-button,.mtnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="veil" id="veil"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════════
+   THE CHAIR — the technician's phone.
+   Everything here is a thin caller of Clients' write API. This file owns no data and
+   decides no permissions: every door it knocks on re-checks the device token, and her
+   chair-scoping is enforced there, not here.
+   ══════════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+var ICON = {
+  clock:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+  bell: '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9z"/><path d="M10.5 18a1.8 1.8 0 0 0 3 0"/></svg>',
+  hand: '<svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 7.5v5"/><path d="M15.5 7.5v5"/><path d="M5 12v3a7 7 0 0 0 14 0v-3"/></svg>',
+  person:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L3.5 9.8l5.9-.9z"/></svg>',
+  search:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.2-3.2"/></svg>',
+  cam:  '<svg viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.2"/></svg>'
+};
+var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
+
+var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[],
+          key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0 };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function money(n){ return '$' + (Math.round((Number(n)||0)*100)/100).toFixed(2); }
+
+var TOASTT;
+function toast(m,kind){
+  var t=$('toast'); t.innerHTML=m; t.className='toast on'+(kind==='err'?' err':'');
+  clearTimeout(TOASTT); TOASTT=setTimeout(function(){ t.className='toast'; }, kind==='err'?4200:2400);
+}
+
+/* ══════════════════════ THE ONLY LINK TO GOOGLE ══════════════════════
+ * This page is served from GitHub Pages, not from Google. That is the entire point: every
+ * failure this app had on a phone — Drive's "unable to open the file", /u/N account routing,
+ * an iframe nothing could reach into — came from asking a phone to LOAD a google.com page.
+ * It does not any more. It loads from our own domain and calls one JSON endpoint.
+ *
+ * Content-Type is text/plain on purpose. application/json triggers a CORS preflight, Apps
+ * Script cannot answer an OPTIONS request, and the browser gives up before the POST is sent.
+ * A "simple request" goes straight through. Measured 2026-08-09.
+ */
+var BOOK = 'https://script.google.com/macros/s/AKfycby0SWGq-PC702gm02TV8mzrOw36wV1jL6P4XlJxpfAvLYs_bzDJ03qGYzrcD74vwX80/exec';
+
+function api(name, payload){
+  return fetch(BOOK, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ name: name, payload: payload || {} })
+  }).then(function(r){
+    return r.text();
+  }).then(function(t){
+    var out;
+    /* Apps Script answers an unauthenticated or broken call with an HTML page, not JSON.
+       Parsing that as data is how a dead endpoint looks like a mysterious app bug. */
+    try { out = JSON.parse(t); }
+    catch (e) { throw new Error('The book could not be reached. Tell the front desk.'); }
+    if (out.error) throw new Error(out.error);
+    return out;
+  })['catch'](function(e){
+    if (e && e.message) throw e;
+    throw new Error('No connection. Check the wifi and try again.');
+  });
+}
+
+/* The token lives on the phone and nowhere else. localStorage rather than a cookie: it is
+   never sent anywhere except in the calls above. */
+function saveToken(t){ try{ localStorage.setItem('artonus_chair', t); }catch(e){} }
+function loadToken(){ try{ return localStorage.getItem('artonus_chair')||''; }catch(e){ return ''; } }
+function dropToken(){ try{ localStorage.removeItem('artonus_chair'); }catch(e){} }
+
+/* ─────────────────────────── enrolment ─────────────────────────── */
+function viewEnrol(){
+  $('app').innerHTML = head('Technician access')
+    + '<div class="card"><h3>Join with your code</h3>'
+    + '<p class="lede">The front desk gives you a code. It works once, for this phone, '
+    + 'and stops working after a day.</p>'
+    + '<input class="in" id="code" type="text" inputmode="latin" autocapitalize="characters" '
+    + 'autocomplete="off" maxlength="9" placeholder="8-character code" style="text-align:center;'
+    + 'font-size:22px;letter-spacing:5px;font-weight:900">'
+    + '<button class="btn" id="join">Use this phone</button></div>';
+  $('code').oninput = function(){ this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
+  $('join').onclick = function(){
+    var c = $('code').value.trim();
+    if (c.length !== 8){ toast('The code is 8 characters.','err'); return; }
+    var b=$('join'); b.disabled=true; b.textContent='Checking…';
+    api('enrol', { code:c, agent:navigator.userAgent.slice(0,120) }).then(function(r){
+      saveToken(r.token); S.token=r.token; S.tech=r.person; S.chair=r.chair;
+      toast(ICON.check+' Signed in as '+esc(r.person));
+      loadDay();
+    })['catch'](function(e){
+      b.disabled=false; b.textContent='Use this phone'; toast(e.message,'err');
+    });
+  };
+}
+
+function head(sub){
+  return '<div class="hdr"><img src="'+LOGO+'" alt="Artonus"><h1>My Day</h1>'
+    + '<div class="sub">'+esc(sub)+'</div></div>'
+    + (S.token ? '<nav class="anav"><span class="pill">'+ICON.person+esc(S.tech)
+        + (S.chair?' · chair '+esc(S.chair):'')+'</span>'+bellHtml()+'</nav>' : '');
+}
+/* NO SIGN-OUT. The code that enrolled this phone was single-use and is already spent, so
+   signing out would strand her mid-shift with a client in the chair. The desk revokes the
+   device if she leaves; that is the correct place for it. */
+
+function bellHtml(){
+  var n = unseen().length;
+  return '<span class="pill" onclick="openBell()">'+ICON.bell+'Alerts'
+    + '<span class="dot bellcount"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></span>';
+}
+
+/* ─────────────────────────── her day ─────────────────────────── */
+function loadDay(){
+  var s = ++S.session;
+  api('techToday', { token:S.token }).then(function(r){
+    if (S.session !== s) return;
+    S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
+    S.view='today'; render();
+    poll();
+  })['catch'](function(e){
+    /* A dead token is the ordinary end of a device's life, not an error to shout about. */
+    if (/not signed in/.test(e.message)){ dropToken(); S.token=''; S.view='enrol'; render(); return; }
+    $('app').innerHTML = head('Your day')
+      + '<div class="card"><h3>Could not load your day</h3><p class="lede">'+esc(e.message)+'</p>'
+      + '<button class="btn" onclick="loadDay()">Try again</button></div>';
+  });
+}
+function can(k){ return !S.caps.length || S.caps.some(function(c){ return c.key===k && c.on; }); }
+
+function viewToday(){
+  var h = head('Today · '+esc(S.tech));
+  if (!S.visits.length){
+    h += '<div class="card"><h3>Nothing in your chair yet</h3>'
+      + '<p class="lede">When the front desk books or walks someone in for you, she appears here.</p></div>';
+  } else {
+    S.visits.forEach(function(v){
+      var tag = v.state==='in service' ? '<span class="tag serv">in service</span>'
+              : v.state==='almost done' ? '<span class="tag serv">almost done</span>'
+              : v.state==='finished' ? '<span class="tag done">finished</span>'
+              : '<span class="tag book">booked</span>';
+      h += '<div class="visit" onclick="openVisit(\''+esc(v.key)+'\')">'
+        + '<div class="t">'+esc(v.at||'')+'</div><div style="flex:1;min-width:0">'
+        + '<div class="nm">'+esc(v.name)+'</div>'
+        + '<div class="sv">'+esc(v.svc||'—')+(v.price?' · '+money(v.price):'')+'</div>'
+        + tag + (v.walkin?' <span class="tag walk">walk-in</span>':'')
+        + (v.moreTime?' <span class="tag book">+'+v.moreTime+' min</span>':'')
+        + '</div></div>';
+    });
+  }
+  h += '<p class="hint" style="margin-top:12px"><b>Only your chair, only today.</b> '
+    + 'There is no search here — the book stays closed except for whoever is in front of you.</p>';
+  h += dockHtml();
+  $('app').innerHTML = h;
+}
+
+/* ─────────────────────────── the visit ─────────────────────────── */
+function openVisit(key){
+  S.key = key;
+  S.visit = S.visits.filter(function(v){ return v.key===key; })[0] || null;
+  S.card = null; S.thumbs = null; S.view = 'visit';
+  render();
+  /* Her card is a second read on purpose: the day list must paint instantly, and the card is
+     the expensive part. A walk-in with no number has no card at all, and says so. */
+  if (S.visit && !S.visit.nameOnly){
+    var s = ++S.session;
+    api('techClient', { token:S.token, key:key }).then(function(c){
+      if (S.session !== s || S.key !== key) return;
+      S.card = c; render(); loadThumbs();
+    })['catch'](function(e){ S.cardErr = e.message; render(); });
+  }
+}
+function viewVisit(){
+  var v = S.visit;
+  if (!v) { S.view='today'; return render(); }
+  var h = head('Her card');
+  h += '<button class="skip" onclick="S.view=\'today\';render()" style="margin-bottom:10px">'
+     + ICON.back+' Today</button>';
+
+  h += '<div class="card"><h3>'+esc(v.name)+'</h3>'
+    + '<p class="lede">'+esc(v.at||'')+' · '+esc(v.svc||'—')
+    + (v.price?' · '+money(v.price):'')+(v.walkin?' · walk-in':'')+'</p>'
+    + (v.nameOnly
+        ? '<p class="hint">She came in without a phone number, so nothing can be saved to a '
+          + 'card for her yet — the front desk can add her number at checkout.</p>' : '')
+    + '</div>';
+
+  h += cardHtml();
+
+  if (v.state === 'booked'){
+    h += '<div class="card"><h3>She is not in the chair yet</h3>'
+      + '<p class="lede">Tap when she sits down. The front desk sees it straight away.</p>'
+      + '<button class="btn" id="seat">She is in the chair</button></div>';
+  } else {
+    h += chairCard(v);
+  }
+  h += dockHtml();
+  $('app').innerHTML = h;
+  if ($('seat')) $('seat').onclick = function(){ sig('SEATED', {}, 'seat'); };
+  wireChair(v);
+}
+
+function chairCard(v){
+  var h = '<div class="card"><h3>In the chair</h3>'
+    + '<p class="lede">Tell the front desk anything that changes what she pays or how long '
+    + 'she needs. They see it within seconds.</p>';
+
+  h += (v.nameOnly ? '' : photosHtml());
+
+  h += '<div class="lbl">Need more time?</div><div class="sigrow">'
+    + [10,15,30].map(function(m){
+        return '<button class="sigbtn" data-mt="'+m+'">'+ICON.clock+'+'+m+' min</button>'; }).join('')
+    + '</div>'
+    + '<div class="row2"><input class="in mtnum" id="mtnum" type="text" inputmode="numeric" '
+    + 'pattern="[0-9]*" placeholder="Or type the minutes" style="margin:0">'
+    + '<button class="skip" id="mtgo">'+ICON.clock+' Send</button></div>'
+    + (v.moreTime ? '<p class="hint">The desk is holding <b>+'+v.moreTime+' min</b> for you. '
+        + 'Sending again replaces it — it never adds up.</p>' : '');
+
+  h += '<div class="lbl">Almost finished?</div><div class="sigrow">'
+    + '<button class="sigbtn" data-sig="ALMOST_DONE">'+ICON.clock+'Tell the desk — almost done</button></div>';
+
+  if (can('tech.serviceChange')){
+    h += '<div class="lbl">She is interested in</div><div class="sigrow">'
+      + ['Rebooking discount','Referral cards'].map(function(n){
+          return '<button class="sigbtn" data-camp="'+esc(n)+'">'+ICON.star+esc(n)+'</button>'; }).join('')
+      + '</div>';
+  }
+
+  if (!v.nameOnly){
+    h += '<div class="lbl">Her book</div><div class="sigrow">'
+      + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write a note</button>'
+      + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star+'Add a must-know</button>'
+      + '</div>';
+  }
+
+  var got = (S.card && S.card.photos) || {};
+  if (v.state === 'finished'){
+    var missing = REQ.filter(function(l){ return !got[l]; });
+    h += (S.card && S.card.rated)
+      ? '<div class="lbl">Your rating</div><p class="lede" style="margin:0">'
+        + 'Saved: <span class="stars">'+'★★★★★'.slice(0,S.card.rated.stars)+'</span></p>'
+      : (missing.length && !v.nameOnly
+          ? '<button class="btn" disabled style="margin-top:14px">Still needed: '+missing.join(', ')+'</button>'
+          : '<button class="btn" style="margin-top:14px" onclick="openRating()">'+ICON.star+'Rate the visit</button>');
+  } else {
+    /* The Before photo gates finishing. It is the one that cannot be taken afterwards, so
+       the button says why rather than sitting dead. */
+    var noBefore = !got.Before && !v.nameOnly;
+    h += '<button class="btn" id="finish" style="margin-top:14px"'+(noBefore?' disabled':'')+'>'
+      + (noBefore ? 'Take the before photo first' : 'She is finished') + '</button>';
+  }
+  return h + '</div>';
+}
+
+/* WHAT WE KNOW ABOUT HER. She reads all of it — a technician who cannot see the allergy is
+   the reason this book exists. */
+function cardHtml(){
+  var v = S.visit;
+  if (v.nameOnly) return '';
+  var c = S.card;
+  if (!c) return '<div class="card"><p class="lede">'
+    + (S.cardErr ? esc(S.cardErr) : 'Opening her card&hellip;') + '</p></div>';
+
+  var h = '';
+  if (c.tally)
+    h += '<div class="card" style="padding:12px 15px"><div class="stars">'
+      + '★★★★★'.slice(0, c.tally.avg >= 4.5 ? 5 : Math.round(c.tally.avg))
+      + '</div><b style="font-size:19px">'+c.tally.avg+'</b> '
+      + '<span class="quiet">· '+c.tally.n+' visits, past year</span></div>';
+
+  (c.flags||[]).forEach(function(f){
+    h += '<div class="flag"><div class="k">'+esc(f.cls)+'</div>'+esc(f.text)
+      + '<div class="note by" style="background:none;border:0;padding:4px 0 0;margin:0">'
+      + esc(f.author)+' · '+esc(f.when)+'</div></div>';
+  });
+
+  h += '<div class="card"><h3>Must-knows</h3><div class="chips">'
+    + ((c.standing||[]).length ? c.standing.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')
+       : '<span class="quiet">Nothing yet.</span>')
+    + '</div>';
+
+  var vis = (c.visits||[]).slice(0,4);
+  h += '<div class="lbl">Notes · everyone’s</div>'
+    + (vis.length ? vis.map(function(n){
+        return '<div class="note"><div class="by">'+esc(n.author)+' · '+esc(n.when)
+          + (n.stars?' · <span class="stars">'+'★★★★★'.slice(0,n.stars)+'</span>':'')+'</div>'
+          + (n.chips.length?'<div class="chips">'+n.chips.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')+'</div>':'')
+          + (n.text?esc(n.text):'')+'</div>'; }).join('')
+      : '<p class="lede">No notes yet — you would be the first.</p>');
+  return h + '</div>';
+}
+
+/* THE THREE PHOTOS THAT ARE NOT OPTIONAL. Before proves what she walked in with; After and
+   Colour are what the next technician needs when she comes back in five weeks. */
+var REQ = ['Before','After','Colour'];
+function photosHtml(){
+  var got = (S.card && S.card.photos) || {}, thumb = S.thumbs || {};
+  return '<div class="lbl">Photos of this visit — required</div><div class="sigrow">'
+    + REQ.map(function(l){
+        var has = !!got[l], src = thumb[l];
+        /* Once it is taken the slot becomes the picture itself, and tapping opens it full
+           size. Retaking is deliberately a second, smaller tap — the common action here is
+           looking, not replacing. */
+        if (has) return '<div class="shot" style="flex:1">'
+          + '<button class="shotbtn" data-open="'+l+'"'
+          + (src?' style="background-image:url('+src+')"':'')+'>'
+          + (src?'':ICON.cam)+'<span class="cap">'+l+'</span></button>'
+          + '<button class="retake" data-photo="'+l+'">Retake</button></div>';
+        return '<button class="sigbtn" data-photo="'+l+'" '
+          + 'style="flex:1;flex-direction:column;min-height:74px;gap:3px;'
+          + 'background:var(--err-soft);border-color:var(--err-line);color:var(--err)">'
+          + ICON.cam+'<span>'+l+'</span>'
+          + '<span style="font-size:9.5px;letter-spacing:1px;font-weight:900;opacity:.8">REQUIRED</span></button>';
+      }).join('')
+    + '</div>';
+}
+
+/* One round trip for all three thumbnails when the card opens. Drive's own small rendition
+   is a few kilobytes, so this costs less than the card itself. */
+function loadThumbs(){
+  if (!S.key || !S.card || !Object.keys(S.card.photos||{}).length) return;
+  var s = ++S.session, key = S.key;
+  api('techPhotos', { token:S.token, key:key }).then(function(r){
+    if (S.session !== s || S.key !== key) return;
+    S.thumbs = r.photos || {}; render();
+  })['catch'](function(){});
+}
+function openShot(label){
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert" style="max-width:none;width:100%;background:none;'
+    + 'box-shadow:none;padding:0;text-align:center">'
+    + '<div class="lbl" style="color:#fff;opacity:.9;margin:0 0 8px">'+esc(label)+'</div>'
+    + '<div id="shotbox"><p class="lede" style="color:#fff">Opening&hellip;</p></div>'
+    + '<button class="btn" style="margin-top:14px" onclick="shutVeil()">Close</button></div>';
+  api('techPhotos', { token:S.token, key:S.key, label:label }).then(function(r){
+    var src = (r.photos||{})[label];
+    if (!$('shotbox')) return;
+    $('shotbox').innerHTML = src
+      ? '<img src="'+src+'" alt="'+esc(label)+'" style="max-width:100%;max-height:70vh;'
+        + 'border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'
+      : '<p class="lede" style="color:#fff">That photo could not be opened.</p>';
+  })['catch'](function(e){
+    if ($('shotbox')) $('shotbox').innerHTML = '<p class="lede" style="color:#fff">'+esc(e.message)+'</p>';
+  });
+}
+function wirePhotos(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-photo]'), function(b){
+    b.onclick = function(){ takePhoto(b.getAttribute('data-photo')); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-open]'), function(b){
+    b.onclick = function(){ openShot(b.getAttribute('data-open')); };
+  });
+}
+function takePhoto(label){
+  var i = document.createElement('input');
+  i.type='file'; i.accept='image/*'; i.capture='environment';
+  i.onchange = function(){
+    var f = i.files && i.files[0]; if (!f) return;
+    toast('Saving the '+label.toLowerCase()+' photo…');
+    shrink(f, function(dataUrl){
+      api('techPhoto', { token:S.token, key:S.key, label:label, data:dataUrl }).then(function(r){
+        if (S.card) S.card.photos = r.photos;
+        toast(ICON.check+' '+label+' saved.'); render(); loadThumbs();
+      })['catch'](function(e){ toast(e.message,'err'); });
+    });
+  };
+  i.click();
+}
+/* DOWNSCALED IN THE BROWSER, ALWAYS — but this is the salon's colour record, so the
+   settings are chosen for that and not just for the wire.
+
+   1600px on the long edge at quality 0.88. A 12MP phone photo is 3–6MB and would not fit
+   through Apps Script at all; 1200/0.82 fit comfortably but lost the free-edge line and put
+   visible blocking into saturated reds and chrome, which are precisely the colours anyone
+   opens these photos to check. 1600/0.88 is roughly double the bytes — a few hundred KB —
+   and holds glitter and chrome texture. Well inside the 3MB the server accepts.
+
+   TWO THINGS THAT ARE EASY TO GET WRONG AND VERY VISIBLE:
+   · ORIENTATION. A phone camera writes the rotation into EXIF rather than into the pixels.
+     Drawing straight to a canvas throws that away, and every portrait photo lands sideways.
+     createImageBitmap with imageOrientation:'from-image' applies it; the <img> fallback is
+     for browsers that lack it, where the tag is honoured anyway.
+   · SMOOTHING. Reducing 4032px to 1600px in one step aliases badly on fine detail — the
+     exact texture we are keeping the photo for. imageSmoothingQuality:'high' costs nothing. */
+var PHOTO_MAX = 1600, PHOTO_Q = 0.88;
+
+function shrink(file, done){
+  function paint(bmp, w0, h0){
+    var w = w0, h = h0;
+    if (w > h && w > PHOTO_MAX){ h = Math.round(h * PHOTO_MAX / w); w = PHOTO_MAX; }
+    else if (h >= w && h > PHOTO_MAX){ w = Math.round(w * PHOTO_MAX / h); h = PHOTO_MAX; }
+    var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bmp, 0, 0, w, h);
+    done(cv.toDataURL('image/jpeg', PHOTO_Q));
+  }
+  if (window.createImageBitmap){
+    createImageBitmap(file, { imageOrientation: 'from-image' })
+      .then(function(b){ paint(b, b.width, b.height); })
+      ['catch'](function(){ viaImg(file, paint); });
+    return;
+  }
+  viaImg(file, paint);
+}
+function viaImg(file, paint){
+  var r = new FileReader();
+  r.onload = function(){
+    var img = new Image();
+    img.onload = function(){ paint(img, img.naturalWidth, img.naturalHeight); };
+    img.src = r.result;
+  };
+  r.readAsDataURL(file);
+}
+
+/* ── the composers. Same vocabulary the desk taps, so one visit reads the same whoever
+      wrote it down. Care and Manner stay on her card; the rest belong to today. ── */
+var VOCAB = [
+  { group:'Shape',  items:['Almond','Coffin','Square','Squoval','Stiletto','Round'] },
+  { group:'Length', items:['Short','Medium','Long','Extra long'] },
+  { group:'System', items:['Structure gel','Gel-X','Builder','Dip','Acrylic','Polish'] },
+  { group:'Colour', items:['Nudes','Reds','French','Chrome','Milky','Dark'] },
+  { group:'Care',   items:['Sensitive skin','Light pressure','Thin nails','Cuticle care'], standing:true },
+  { group:'Manner', items:['Prefers quiet','Chatty','Runs late','Brings her mum'], standing:true }
+];
+var COMP = { kind:'note', picked:{} };
+function openCompose(kind){
+  COMP = { kind:kind, picked:{} };
+  var mk = kind==='mk';
+  var groups = mk ? VOCAB.filter(function(g){ return g.standing; }) : VOCAB;
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert"><h3>'+(mk?'Add a must-know':'Write a note')+'</h3>'
+    + '<p class="lede">'+(mk?'A lasting fact about her care. Everyone sees it on her card, every visit.'
+        :'What happened today. Care and Manner words stay on her card.')+'</p>'
+    + '<div id="cgrid">'+groups.map(function(g){
+        return '<div class="lbl">'+esc(g.group)+(g.standing?' · stays on her card':'')+'</div>'
+          + '<div class="sigrow">'+g.items.map(function(t){
+              return '<button class="rchip" data-chip="'+esc(t)+'">'+esc(t)+'</button>'; }).join('')+'</div>';
+      }).join('')+'</div>'
+    + '<div class="lbl">'+(mk?'In your words — required':'Anything else')+'</div>'
+    + '<textarea class="ta" id="ctext" rows="3" placeholder="'
+    + (mk?'e.g. Reacts to acetone — use the gentle remover':'What she asked for, what worked…')+'"></textarea>'
+    + '<p class="hint" style="margin:-4px 0 8px">No phone numbers or emails.</p>'
+    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
+    + '<button class="btn" id="csave" style="flex:1" disabled>'+(mk?'Save must-know':'Save note')+'</button></div></div>';
+  Array.prototype.forEach.call(document.querySelectorAll('[data-chip]'), function(b){
+    b.onclick = function(){
+      var t = b.getAttribute('data-chip');
+      if (COMP.picked[t]) delete COMP.picked[t]; else COMP.picked[t] = true;
+      b.className = 'rchip' + (COMP.picked[t] ? ' on' : '');
+      syncCompose();
+    };
+  });
+  $('ctext').oninput = syncCompose;
+  $('csave').onclick = saveCompose;
+  syncCompose();
+}
+function syncCompose(){
+  var txt = ($('ctext')||{value:''}).value.trim();
+  var n = Object.keys(COMP.picked).length;
+  /* A must-know with no words is a chip nobody can act on. A note can be chips alone. */
+  $('csave').disabled = COMP.kind==='mk' ? !txt : !(n || txt);
+}
+function saveCompose(){
+  var b = $('csave'); b.disabled = true; b.innerHTML = 'Saving…';
+  var txt = ($('ctext')||{value:''}).value, chips = Object.keys(COMP.picked);
+  var mk = COMP.kind==='mk';
+  api(mk?'techMustKnow':'techNote',
+      { token:S.token, key:S.key, chips:chips, text:txt,
+        opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
+    shutVeil(); toast(ICON.check+' Saved to her card.');
+    return api('techClient', { token:S.token, key:S.key });
+  }).then(function(c){ if (c) S.card = c; render(); })
+  ['catch'](function(e){ b.disabled=false; b.innerHTML = mk?'Save must-know':'Save note'; toast(e.message,'err'); });
+}
+
+/* ── the rating. After the visit ends, never during: rating mid-service rates a guess. ── */
+var WHY = ['Ran long','Arrived late','Changed her mind','Hard to work with','Damage to repair'];
+function openRating(){
+  var stars = 0, why = {};
+  function paint(){
+    $('veil').innerHTML = '<div class="alert"><h3>How did it go?</h3>'
+      + '<p class="lede">Only the team ever sees this. She never does.</p>'
+      + '<div class="sigrow" style="justify-content:center;margin:10px 0">'
+      + [1,2,3,4,5].map(function(n){
+          return '<button class="rchip'+(n<=stars?' on':'')+'" data-star="'+n+'" '
+            + 'style="min-width:52px;min-height:52px;justify-content:center;font-size:20px">'
+            + (n<=stars?'★':'☆')+'</button>'; }).join('')+'</div>'
+      + (stars && stars<=3
+          ? '<div class="lbl">What made it hard? — pick at least one</div><div class="sigrow">'
+            + WHY.map(function(w){ return '<button class="rchip'+(why[w]?' on':'')+'" data-why="'+esc(w)+'">'
+                + esc(w)+'</button>'; }).join('')+'</div>' : '')
+      + '<div class="lbl">Anything to add</div>'
+      + '<textarea class="ta" id="rnote" rows="2" placeholder="Optional"></textarea>'
+      + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
+      + '<button class="btn" id="rsave" style="flex:1"'
+      + (!stars || (stars<=3 && !Object.keys(why).length) ? ' disabled' : '')+'>Save</button></div></div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-star]'), function(b){
+      b.onclick = function(){ stars = Number(b.getAttribute('data-star')); why = {}; paint(); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-why]'), function(b){
+      b.onclick = function(){ var w=b.getAttribute('data-why');
+        if (why[w]) delete why[w]; else why[w]=true; paint(); };
+    });
+    if ($('rsave')) $('rsave').onclick = function(){
+      var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
+      api('techRating', { token:S.token, key:S.key, stars:stars,
+                          why:Object.keys(why), note:($('rnote')||{value:''}).value }).then(function(){
+        shutVeil(); toast(ICON.check+' Saved. Thank you.');
+        /* Re-pull the card, not just the day: without this her own rating is invisible until
+           she leaves the screen and comes back, which reads as "it did not save". */
+        api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })
+          ['catch'](function(){ refresh(); });
+      })['catch'](function(e){ btn.disabled=false; btn.innerHTML='Save'; toast(e.message,'err'); });
+    };
+  }
+  $('veil').className='veil on';
+  paint();
+}
+
+function wireChair(v){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mt]'), function(b){
+    b.onclick = function(){ sig('MORE_TIME', { mins:Number(b.getAttribute('data-mt')) }, b); };
+  });
+  if ($('mtgo')) $('mtgo').onclick = function(){
+    var n = Number(($('mtnum').value||'').replace(/\D/g,''));
+    if (!(n>=5 && n<=120)){ toast('Between 5 and 120 minutes.','err'); return; }
+    sig('MORE_TIME', { mins:n }, $('mtgo'));
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sig]'), function(b){
+    b.onclick = function(){ sig(b.getAttribute('data-sig'), {}, b); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-camp]'), function(b){
+    b.onclick = function(){ sig('CAMPAIGN_INTEREST', { name:b.getAttribute('data-camp') }, b); };
+  });
+  if ($('finish')) $('finish').onclick = function(){ sig('FINISHED', {}, $('finish')); };
+  wirePhotos();
+}
+
+/* One lock across the whole round trip. Without it a second tap while the first is in the
+   air sends the same thing twice, and the desk sees a request nobody made. */
+function sig(kind, payload, btn){
+  if (S.busy) return;
+  S.busy = true;
+  var el = (typeof btn === 'string') ? $(btn) : btn;
+  var was = el && el.innerHTML;
+  if (el){ el.disabled = true; el.innerHTML = 'Sending…'; }
+  api('signal', { token:S.token, key:S.key, kind:kind, payload:payload }).then(function(){
+    S.busy = false;
+    if (el){ el.className = (el.className||'').replace(' sent','') + ' sent';
+             el.innerHTML = ICON.check + ' Sent'; }
+    toast(ICON.check+' The front desk has it.');
+    refresh();
+    if (S.key && S.visit && !S.visit.nameOnly)
+      api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })['catch'](function(){});
+  })['catch'](function(e){
+    S.busy = false;
+    if (el){ el.disabled=false; el.innerHTML = was; }
+    toast(e.message,'err');
+  });
+}
+
+/* ─────────────────────────── help ─────────────────────────── */
+function mmss(ms){ var s=Math.max(0,Math.round(ms/1000));
+  return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
+function stampMs(s){ var t = Date.parse(String(s||'').replace(' ','T')); return isFinite(t)?t:Date.now(); }
+
+function dockHtml(){
+  if (!can('tech.help')) return '';
+  var h = S.help;
+  if (!h) return '<div class="dock"><button class="helpbtn" onclick="askHelp()">'
+    + ICON.hand+'Ask the front desk for help</button></div>';
+  if (h.ack)
+    return '<div class="dock"><div class="hstate coming"><div class="r">'+ICON.check
+      + '<b>'+esc(h.ack.by)+' is coming</b><span class="t2">'+mmss(Date.now()-stampMs(h.ack.at))+'</span></div>'
+      + '<button onclick="clearHelp()">All good — close it</button></div></div>';
+  var age = Date.now()-stampMs(h.at);
+  return '<div class="dock"><div class="hstate wait"><div class="r">'+ICON.hand
+    + '<b>Waiting for the front desk</b><span class="t2">'+mmss(age)+'</span></div>'
+    + (h.reason ? '<div style="margin-top:5px;opacity:.93">'+esc(h.reason)+'</div>'
+       : '<div class="cr">'+['Extra hands','Supplies','A question','The client needs something']
+           .map(function(r){ return '<button onclick="helpWhy(\''+esc(r)+'\')">'+esc(r)+'</button>'; }).join('')
+         +'</div>')
+    + '<button onclick="clearHelp()">'+(age<10000?'Never mind':'No longer needed')+'</button></div></div>';
+}
+function askHelp(){
+  api('help',{token:S.token}).then(function(r){
+    if (r.existing){ toast('You already have a request open.'); return; }
+    toast(ICON.check+' Sent — the front desk can see it.'); refresh();
+  })['catch'](function(e){ toast(e.message,'err'); });
+}
+function helpWhy(r){ api('helpReason',{token:S.token,reason:r}).then(refresh)['catch'](function(e){ toast(e.message,'err'); }); }
+function clearHelp(){ api('helpClear',{token:S.token,how:'tech'}).then(function(){ toast('Closed.'); refresh(); }); }
+
+/* ─────────────────────────── alerts ─────────────────────────── */
+var FEED = [];
+function unseen(){ return FEED.filter(function(e){ return !S.seen[e.id]; }); }
+function evText(e){
+  var p = e.payload||{}, nm = '<b>'+esc(visitName(e.visitKey))+'</b>';
+  function ba(was,now){ return '<span class="ba">'+(was?'<span class="was">'+esc(was)+'</span><span class="arrow">→</span>':'')
+    + '<b>'+esc(now)+'</b></span>'; }
+  switch(e.type){
+    case 'WALKIN_ADD': return 'Walk-in <b>'+esc(p.name)+'</b> added'+(p.at?' at '+esc(p.at):'');
+    case 'SVC_CHANGE': return nm+' service '+ba(p.from?p.from+' · '+money(p.fromPrice):'', p.to+' · '+money(p.price));
+    case 'ADDON':      return nm+' add-on <b>'+esc(p.label||p.name)+'</b>';
+    case 'DESIGN_BRIEF': return nm+' — <b>the design she wants</b> is on her card';
+    case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
+    default: return nm+' '+esc(e.type.toLowerCase().replace(/_/g,' '));
+  }
+}
+function visitName(key){
+  var v = S.visits.filter(function(x){ return x.key===key; })[0];
+  return v ? v.name : 'Your chair';   // the subject of a signal, not the app's name
+}
+/* Only what the DESK sent her. Her own signals coming back would alert her about herself. */
+function mine(e){ return e.who !== S.tech && e.type.indexOf('HELP') !== 0; }
+
+function paintAlert(){
+  var el = $('veil'), pend = unseen();
+  if (!pend.length){ el.className='veil'; S.shownIds=[]; return; }
+  var wasOpen = el.classList.contains('on');
+  var fresh = wasOpen ? pend.filter(function(e){ return S.shownIds.indexOf(e.id)<0; }).map(function(e){return e.id;}) : [];
+  S.shownIds = pend.map(function(e){ return e.id; });
+  el.className = 'veil on';
+  el.innerHTML = '<div class="alert"><div class="hd">'+ICON.bell+'From the front desk · '
+    + pend.length+(pend.length>1?' updates':' update')+'</div>'
+    + pend.slice().reverse().map(function(e){
+        return '<div class="item'+(fresh.indexOf(e.id)>=0?' fresh':'')+'">'+evText(e)
+          + '<div class="who">'+esc(e.who||'')+'</div></div>'; }).join('')
+    + (fresh.length?'<div class="newline">'+fresh.length+' arrived while you were reading — included above.</div>':'')
+    + '<button class="btn" style="margin-top:12px" onclick="ackShown()">Got it'
+    + (pend.length>1?' — all '+pend.length:'')+'</button></div>';
+}
+/* Acknowledges EXACTLY what was on screen. Anything that lands a heartbeat later stays
+   pending and the card simply stays open with it. Nothing can be marked read unread. */
+function ackShown(){
+  S.shownIds.forEach(function(id){ S.seen[id] = true; });
+  paintAlert(); refreshBell(); render();
+}
+function openBell(){
+  var el=$('veil');
+  el.className='veil on';
+  el.innerHTML = '<div class="alert"><div class="hd">'+ICON.bell+'From the front desk</div>'
+    + (FEED.length ? FEED.slice().reverse().slice(0,14).map(function(e){
+        return '<div class="item">'+(S.seen[e.id]?'':'<b style="color:var(--gold)">NEW </b>')
+          + evText(e)+'<div class="who">'+esc(e.who||'')+'</div></div>'; }).join('')
+      : '<p class="lede">Nothing yet today.</p>')
+    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Close</button>'
+    + (unseen().length?'<button class="btn" style="flex:1" onclick="ackAll()">Mark all seen</button>':'')
+    + '</div></div>';
+}
+function shutVeil(){ var v=$('veil'); v.className='veil'; v.innerHTML=''; }
+function ackAll(){ FEED.forEach(function(e){ S.seen[e.id]=true; }); shutVeil(); refreshBell(); render(); }
+function refreshBell(){
+  var el = document.querySelector('.bellcount'); if (!el) return;
+  var n = unseen().length; el.textContent = n||''; el.style.display = n?'flex':'none';
+}
+
+/* ─────────────────────────── the poll ─────────────────────────── */
+/* Apps Script has no push. Twenty seconds while the screen is on, paused when it is not —
+   a phone face-down on the station must not spend the salon's daily quota. */
+var POLL_MS = 20000, POLLT = null;
+function poll(){
+  clearTimeout(POLLT);
+  POLLT = setTimeout(function(){ if (!document.hidden) refresh(true); poll(); },
+                     POLL_MS + Math.round((Math.random()-0.5)*POLL_MS*0.3));
+}
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) refresh(true); });
+
+function refresh(quiet){
+  if (!S.token) return;
+  api('techToday', { token:S.token }).then(function(r){
+    S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
+    if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
+    return api('dayFeed', { token:S.token, since:S.cursor });
+  }).then(function(f){
+    if (f && f.events && f.events.length){
+      f.events.filter(mine).forEach(function(e){ FEED.push(e); });
+      S.cursor = f.cursor;
+    }
+    render(); paintAlert(); refreshBell();
+  })['catch'](function(e){
+    if (/not signed in/.test(e.message)){ dropToken(); S.token=''; S.view='enrol'; render(); return; }
+    if (!quiet) toast(e.message,'err');
+  });
+}
+
+function render(){
+  if (S.view==='enrol' || !S.token) return viewEnrol();
+  if (S.view==='visit') return viewVisit();
+  return viewToday();
+}
+
+/* The help timers tick without a round trip — the clock is local, the state is the ledger's. */
+setInterval(function(){ if (S.token && S.help) render(); }, 1000);
+
+(function boot(){
+  var t = loadToken();
+  if (!t){ S.view='enrol'; render(); return; }
+  S.token = t; loadDay();
+})();
+</script>
+</body>
+</html>
