@@ -550,7 +550,11 @@ function wirePhotos(){
 }
 function takePhoto(label){
   var i = document.createElement('input');
-  i.type='file'; i.accept='image/*'; i.capture='environment';
+  /* NO `capture` attribute. Setting capture='environment' forces the camera and hides the
+     photo library entirely — on iOS the picker opens straight into the lens with no way out.
+     Without it the OS offers the choice: Photo Library, Take Photo, Choose File. Taking the
+     photo is still what we want her to do; blocking every other route was never the point. */
+  i.type='file'; i.accept='image/*';
   i.onchange = function(){
     var f = i.files && i.files[0]; if (!f) return;
     toast('Saving the '+label.toLowerCase()+' photo…');
