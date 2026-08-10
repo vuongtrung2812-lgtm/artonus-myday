@@ -888,27 +888,57 @@ function saveCompose(){
   ['catch'](function(e){ b.disabled=false; b.innerHTML = mk?'Save must-know':'Save note'; toast(e.message,'err'); });
 }
 
-/* ── the rating. After the visit ends, never during: rating mid-service rates a guess. ── */
-var WHY = ['Ran long','Arrived late','Changed her mind','Hard to work with','Damage to repair'];
+/* ── THE RATING — of the VISIT, never of the woman ──────────────────────────
+ *
+ * The demo's governing line is "Rate this visit — never the person," and the build had
+ * replaced it with "Only the team ever sees this. She never does." That is not the same
+ * promise; it is permission. The reasons had drifted with it: 'Hard to work with' and
+ * 'Changed her mind' judge a person, and they are written to a spreadsheet row keyed to a
+ * named woman's phone number, where they outlive everyone's memory of the day.
+ *
+ * These reasons describe what HAPPENED, which is the only thing the next technician can act
+ * on. And the booking chips below are the point of the whole screen: a star with no
+ * instruction is a grudge, a star with "book extra time" is a salon that runs better.
+ */
+var WHY = ['Ran past booked time', 'Changed design mid-service', 'Asked for redo',
+           'Arrived late', 'Damage to repair'];
+var WRAP = [['Book as usual', 'check'], ['Book extra time', 'clock'],
+            ['Check with her before booking', 'hand']];
+
 function openRating(){
-  var stars = 0, why = {};
+  var stars = 0, why = {}, wrap = {};
+
+  function hint(){
+    if (!stars) return 'Rate this visit — never the person.';
+    return stars >= 4 ? 'Good visit — pick the booking note and save.'
+                      : 'Say what happened, so the next person can act on it.';
+  }
+  function ready(){
+    var needWhy = stars > 0 && stars <= 3;
+    var told = Object.keys(wrap).length || (($('rnote') || { value: '' }).value.trim().length > 0);
+    return stars > 0 && told && (!needWhy || Object.keys(why).length > 0);
+  }
+
   function paint(){
-    $('veil').innerHTML = '<div class="alert"><h3>How did it go?</h3>'
-      + '<p class="lede">Only the team ever sees this. She never does.</p>'
-      + '<div class="sigrow" style="justify-content:center;margin:10px 0">'
+    $('veil').innerHTML = '<div class="alert"><h3>How was the visit?</h3>'
+      + '<div class="sigrow" style="justify-content:center;margin:8px 0 2px">'
       + [1,2,3,4,5].map(function(n){
           return '<button class="rchip'+(n<=stars?' on':'')+'" data-star="'+n+'" '
             + 'style="min-width:52px;min-height:52px;justify-content:center;font-size:20px">'
             + (n<=stars?'★':'☆')+'</button>'; }).join('')+'</div>'
+      + '<p class="hint" style="text-align:center;margin:0 0 10px">'+esc(hint())+'</p>'
       + (stars && stars<=3
-          ? '<div class="lbl">What made it hard? — pick at least one</div><div class="sigrow">'
+          ? '<div class="lbl">What made it that way? — pick at least one</div><div class="sigrow">'
             + WHY.map(function(w){ return '<button class="rchip'+(why[w]?' on':'')+'" data-why="'+esc(w)+'">'
                 + esc(w)+'</button>'; }).join('')+'</div>' : '')
-      + '<div class="lbl">Anything to add</div>'
-      + '<textarea class="ta" id="rnote" rows="2" placeholder="Optional"></textarea>'
+      + '<div class="lbl">For the front desk — pick all that apply</div><div class="sigrow">'
+      + WRAP.map(function(w){ return '<button class="rchip'+(wrap[w[0]]?' on':'')+'" data-wrap="'+esc(w[0])+'">'
+          + (ICON[w[1]]||'')+esc(w[0])+'</button>'; }).join('')+'</div>'
+      + '<div class="lbl">Your booking tip — optional</div>'
+      + '<textarea class="ta" id="rnote" rows="2" placeholder="e.g. Book her with Chelsea next time."></textarea>'
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
-      + '<button class="btn" id="rsave" style="flex:1"'
-      + (!stars || (stars<=3 && !Object.keys(why).length) ? ' disabled' : '')+'>Save</button></div></div>';
+      + '<button class="btn" id="rsave" style="flex:1"'+(ready()?'':' disabled')+'>Save rating</button></div></div>';
+
     Array.prototype.forEach.call(document.querySelectorAll('[data-star]'), function(b){
       b.onclick = function(){ stars = Number(b.getAttribute('data-star')); why = {}; paint(); };
     });
@@ -916,16 +946,32 @@ function openRating(){
       b.onclick = function(){ var w=b.getAttribute('data-why');
         if (why[w]) delete why[w]; else why[w]=true; paint(); };
     });
+    /* "Book as usual" is exclusive: it cannot be true at the same time as "book extra time"
+       or "check with her first", and a desk reading both would not know which to believe. */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-wrap]'), function(b){
+      b.onclick = function(){
+        var w = b.getAttribute('data-wrap');
+        if (wrap[w]) { delete wrap[w]; }
+        else if (w === 'Book as usual') { wrap = {}; wrap[w] = true; }
+        else { delete wrap['Book as usual']; wrap[w] = true; }
+        paint();
+      };
+    });
+    if ($('rnote')) $('rnote').oninput = function(){
+      var b = $('rsave'); if (b) b.disabled = !ready();
+    };
     if ($('rsave')) $('rsave').onclick = function(){
       var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
+      /* The booking instruction rides with the reasons — it is the half the desk acts on. */
+      var chips = Object.keys(why).concat(Object.keys(wrap));
       api('techRating', { token:S.token, key:S.key, stars:stars,
-                          why:Object.keys(why), note:($('rnote')||{value:''}).value }).then(function(){
+                          why:chips, note:($('rnote')||{value:''}).value }).then(function(){
         shutVeil(); toast(ICON.check+' Saved. Thank you.');
         /* Re-pull the card, not just the day: without this her own rating is invisible until
            she leaves the screen and comes back, which reads as "it did not save". */
         api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })
           ['catch'](function(){ refresh(); });
-      })['catch'](function(e){ btn.disabled=false; btn.innerHTML='Save'; toast(e.message,'err'); });
+      })['catch'](function(e){ btn.disabled=false; btn.innerHTML='Save rating'; toast(e.message,'err'); });
     };
   }
   $('veil').className='veil on';
