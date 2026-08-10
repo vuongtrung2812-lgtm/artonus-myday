@@ -997,14 +997,38 @@ function dockHtml(){
          +'</div>')
     + '<button onclick="clearHelp()">'+(age<10000?'Never mind':'No longer needed')+'</button></div></div>';
 }
+/* HER SCREEN STAYS AWAKE WHILE SHE IS WAITING.
+ * A phone propped against the station locks after thirty seconds, and then the answer —
+ * "someone is coming" — arrives on a black screen she has to pick up and unlock to see,
+ * with her hands wet. The lock is held only while a request is open, so the cost is bounded
+ * by the request, and the tap that raises the hand is the user gesture the API requires. */
+var WAKE = null;
+function keepAwake(on){
+  try {
+    if (on && navigator.wakeLock && !WAKE)
+      navigator.wakeLock.request('screen').then(function(w){ WAKE = w; })['catch'](function(){});
+    if (!on && WAKE){ WAKE.release(); WAKE = null; }
+  } catch (e) {}
+}
+/* A wake lock is dropped by the browser whenever the page is hidden, so it has to be
+   re-taken on return or it silently stops working after the first glance away. */
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden && S.help && !S.help.cleared) keepAwake(true);
+});
+
 function askHelp(){
+  keepAwake(true);
   api('help',{token:S.token}).then(function(r){
     if (r.existing){ toast('You already have a request open.'); return; }
     toast(ICON.check+' Sent — the front desk can see it.'); refresh();
-  })['catch'](function(e){ toast(e.message,'err'); });
+  })['catch'](function(e){ keepAwake(false); toast(e.message,'err'); });
 }
 function helpWhy(r){ api('helpReason',{token:S.token,reason:r}).then(refresh)['catch'](function(e){ toast(e.message,'err'); }); }
-function clearHelp(){ api('helpClear',{token:S.token,how:'tech'}).then(function(){ toast('Closed.'); refresh(); }); }
+function clearHelp(){
+  api('helpClear',{token:S.token,how:'tech'}).then(function(){
+    keepAwake(false); toast('Closed.'); refresh();
+  })['catch'](function(e){ toast(e.message,'err'); });
+}
 
 /* ─────────────────────────── alerts ─────────────────────────── */
 var FEED = [];
