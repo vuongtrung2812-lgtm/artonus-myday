@@ -202,7 +202,10 @@
   .sentbar{display:flex;gap:9px;align-items:flex-start;background:var(--ok-soft);
     border:1px solid var(--ok);border-radius:12px;padding:10px 12px;margin:0 0 10px;
     font-size:13.5px;line-height:1.45}
-  .sentbar svg{flex:none;stroke:var(--ok);margin-top:2px}
+  /* WIDTH AND HEIGHT ARE NOT OPTIONAL. An inline SVG with a viewBox and no explicit size
+     expands to fill its box — the design-brief star rendered the height of the card and shoved
+     the text off the screen. flex:none stops it being squashed; it does not give it a size. */
+  .sentbar svg{flex:none;stroke:var(--ok);margin-top:2px;width:16px;height:16px}
   .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
   .sigbtn.sent svg{stroke:var(--ok)}
   .sigbtn:disabled{opacity:1;cursor:default}
@@ -210,7 +213,7 @@
   .brief{display:flex;gap:9px;align-items:flex-start;background:var(--gold-soft);
     border:1px solid var(--gold);border-radius:14px;padding:12px 13px;margin-bottom:9px;
     font-size:14px;line-height:1.5}
-  .brief svg{flex:none;stroke:var(--gold);margin-top:2px}
+  .brief svg{flex:none;stroke:var(--gold);margin-top:2px;width:16px;height:16px}
   .tag.want{background:var(--gold-soft);border-color:var(--gold);color:var(--espresso)}
   .tag.want svg{width:11px;height:11px;stroke:var(--gold);vertical-align:-1px;margin-right:3px}
   /* Moves and cancellations — the day rearranging itself, said out loud. */
