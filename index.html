@@ -684,7 +684,7 @@ function colorHtml(v){
   return '<div class="lbl">The color she had</div>'
     + (done
         ? '<div class="note"><b>'+esc(done)+'</b><br>'
-          + '<button class="linkbtn" onclick="openColor()">Change it</button></div>'
+          + '<button class="skip" style="margin-top:8px" onclick="openColor()">Change it</button></div>'
         : '<button class="sigbtn" style="width:100%" onclick="openColor()">'
           + ICON.plus+'Record the color</button>');
 }
