@@ -206,6 +206,21 @@
   .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
   .sigbtn.sent svg{stroke:var(--ok)}
   .sigbtn:disabled{opacity:1;cursor:default}
+  /* The design brief — gold, above everything, because it is the thing she is about to do. */
+  .brief{display:flex;gap:9px;align-items:flex-start;background:var(--gold-soft);
+    border:1px solid var(--gold);border-radius:14px;padding:12px 13px;margin-bottom:9px;
+    font-size:14px;line-height:1.5}
+  .brief svg{flex:none;stroke:var(--gold);margin-top:2px}
+  .tag.want{background:var(--gold-soft);border-color:var(--gold);color:var(--espresso)}
+  .tag.want svg{width:11px;height:11px;stroke:var(--gold);vertical-align:-1px;margin-right:3px}
+  /* Moves and cancellations — the day rearranging itself, said out loud. */
+  .changes{margin-bottom:10px}
+  .chg{display:flex;gap:8px;align-items:flex-start;background:var(--warn-soft,#FBF3E2);
+    border:1px solid var(--warn,#8A6D2F);border-radius:12px;padding:9px 12px;margin-bottom:6px;
+    font-size:13.5px;line-height:1.45}
+  .chg svg{flex:none;stroke:var(--warn,#8A6D2F);margin-top:2px;width:16px;height:16px}
+  .chg .was{text-decoration:line-through;color:var(--muted);margin-right:4px}
+  .chg .arrow{color:var(--muted);margin-right:4px}
 </style>
 </head>
 <body>
@@ -246,6 +261,9 @@
 
 var ICON = {
   clock:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  /* Used by the cancellation line. Referencing an icon that does not exist prints the word
+     "undefined" into the page, which is how a missing icon becomes a visible bug. */
+  close:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   check:'<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>',
   bell: '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9z"/><path d="M10.5 18a1.8 1.8 0 0 0 3 0"/></svg>',
@@ -363,6 +381,7 @@ function loadDay(){
     REFRESHING = false; pollTrouble(false);
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
+    S.changes = r.changes || [];
     /* quiet: whatever happened before she opened the app is history. It is all in the bell,
        and the count is on the badge; what it must not be is a modal over her first screen. */
     absorb(r, true);
@@ -378,12 +397,40 @@ function loadDay(){
 }
 function can(k){ return !S.caps.length || S.caps.some(function(c){ return c.key===k && c.on; }); }
 
+/**
+ * WHAT CHANGED TODAY — moves and cancellations, said out loud.
+ *
+ * A cancelled booking used to just disappear from her list on the next poll, and a moved one
+ * silently re-timed. She would go looking for a client who was never coming, or stand ready
+ * at two for someone shifted to half past three. Neither is a thing she can find out from a
+ * list that quietly rearranged itself.
+ */
+function changesHtml(){
+  var ch = S.changes || [];
+  if (!ch.length) return '';
+  return '<div class="changes">'
+    + ch.map(function(c){
+        var who = '<b>'+esc(c.name || 'A client')+'</b>';
+        return '<div class="chg">' + (c.type === 'CANCELED'
+          ? ICON.close + '<div>' + who + ' at ' + esc(c.was || '—') + ' <b>cancelled</b>'
+            + (c.svc ? ' <span class="quiet">· '+esc(c.svc)+'</span>' : '') + '</div>'
+          : ICON.clock + '<div>' + who + ' moved <span class="was">' + esc(c.was || '—')
+            + '</span><span class="arrow">→</span><b>' + esc(c.now || '—') + '</b></div>')
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
 function viewToday(){
   var h = head('Today · '+esc(S.tech));
+  h += changesHtml();
   if (!S.visits.length){
     h += '<div class="card"><h3>Nothing in your chair yet</h3>'
       + '<p class="lede">When the front desk books or walks someone in for you, she appears here.</p></div>';
   } else {
+    /* Inside the else, not above the guard: "Booked at your chair · 0" over "Nothing in your
+       chair yet" is two contradictory sentences. */
+    h += '<div class="lbl">Booked at your chair · '+S.visits.length+'</div>';
     S.visits.forEach(function(v){
       var tag = v.state==='in service' ? '<span class="tag serv">in service</span>'
               : v.state==='almost done' ? '<span class="tag serv">almost done</span>'
@@ -395,6 +442,9 @@ function viewToday(){
         + '<div class="sv">'+esc(v.svc||'—')+(v.price?' · '+money(v.price):'')+'</div>'
         + tag + (v.walkin?' <span class="tag walk">walk-in</span>':'')
         + (v.moreTime?' <span class="tag book">+'+v.moreTime+' min</span>':'')
+        /* She should know a design is waiting BEFORE she opens the card, so she can read it
+           while the client is still walking over rather than after she has sat down. */
+        + (v.hasBrief?' <span class="tag want">'+ICON.star+'design</span>':'')
         + '</div></div>';
     });
   }
@@ -541,6 +591,17 @@ function cardHtml(){
     + (S.cardErr ? esc(S.cardErr) : 'Opening her card&hellip;') + '</p></div>';
 
   var h = '';
+  /* WHAT SHE ASKED FOR, first. The alert says this is "on her card" and until now it was
+     not — a technician who dismissed the pop-up mid-service had no second way to read it.
+     Above the flags on purpose: the flags say how to treat her, this says what to make. */
+  if (c.brief && c.brief.text){
+    h += '<div class="brief">'+ICON.star+'<div><b>The design she wants</b><br>'
+      + esc(c.brief.text)
+      + '<div class="note by" style="background:none;border:0;padding:4px 0 0;margin:0">'
+      + esc(c.brief.by||'Front desk')+(c.brief.when?' · '+esc(c.brief.when):'')
+      + (c.brief.photos ? ' · '+c.brief.photos+' photo'+(c.brief.photos>1?'s':'') : '')
+      + '</div></div></div>';
+  }
   if (c.tally)
     h += '<div class="card" style="padding:12px 15px"><div class="stars">'
       + '★★★★★'.slice(0, c.tally.avg >= 4.5 ? 5 : Math.round(c.tally.avg))
@@ -1157,7 +1218,11 @@ function evText(e){
        one update that silently raises a bill was the one that did not show it. */
     case 'ADDON':      return nm+' add-on <b>'+esc(p.label||p.name)+'</b>'
                        + (p.toPrice ? ' ' + ba(money(p.fromPrice), money(p.toPrice)) : '');
-    case 'DESIGN_BRIEF': return nm+' — <b>the design she wants</b> is on her card';
+    /* Print the brief itself. "It is on her card" made her go and look, mid-service, for
+       something that could have been in front of her. */
+    case 'DESIGN_BRIEF': return nm+' wants <b>'+esc(p.text||'a design — see her card')+'</b>'
+                       + (p.photos ? ' <span class="quiet">('+p.photos+' photo'
+                          +(p.photos>1?'s':'')+' on her card)</span>' : '');
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
     default: return nm+' '+esc(e.type.toLowerCase().replace(/_/g,' '));
   }
@@ -1357,6 +1422,7 @@ function refresh(quiet){
     pollTrouble(false);
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
+    S.changes = r.changes || [];
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
     if (absorb(r)) { refresh(quiet); return; }     // the day rolled: start it from zero
     render(); paintAlert(); refreshBell();
