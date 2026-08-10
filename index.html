@@ -195,6 +195,9 @@
     font-weight:800;color:var(--ink);cursor:pointer}
   .pick:disabled{opacity:.55}
   .pick .quiet{font-weight:700;font-size:12.5px;color:var(--muted)}
+  /* The salon's own mark in the alert header, not a stock bell. A technician sees this a
+     dozen times a day; it should look like it belongs to Artonus. */
+  .alert .hd .hdmark{height:16px;width:auto;margin-right:8px;vertical-align:-3px;opacity:.95}
 </style>
 </head>
 <body>
@@ -218,6 +221,10 @@
   </div>
 </div></div>
 <div class="veil" id="veil"></div>
+<!-- SEPARATE FROM #veil ON PURPOSE. The alert repaints on every poll; the composer lives in
+     #veil and must not be torn down by it. Sharing one element meant paintAlert() closed the
+     must-know box every few seconds and it could not be filled in at all. -->
+<div class="veil" id="alertveil"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -347,6 +354,7 @@ function loadDay(){
     if (S.session !== s) return;
     REFRESHING = false; pollTrouble(false);
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
+    if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     /* quiet: whatever happened before she opened the app is history. It is all in the bell,
        and the count is on the badge; what it must not be is a modal over her first screen. */
     absorb(r, true);
@@ -444,7 +452,7 @@ function chairCard(v){
      the server does not have — and it left her with a "Rate the visit" button that could
      only ever refuse, because rating requires the photos she was never allowed to take. */
   h += photosHtml();
-  h += colourHtml(v);
+  h += colorHtml(v);
   h += svcHtml(v);
 
   h += '<div class="lbl">Need more time?</div><div class="sigrow">'
@@ -530,8 +538,8 @@ function cardHtml(){
 }
 
 /* THE THREE PHOTOS THAT ARE NOT OPTIONAL. Before proves what she walked in with; After and
-   Colour are what the next technician needs when she comes back in five weeks. */
-var REQ = ['Before','After','Colour'];
+   Color are what the next technician needs when she comes back in five weeks. */
+var REQ = ['Before','After','Color'];
 
 /* What is still outstanding before this visit can be closed. Mirrors finishBlockers_ on the
    server word for word — the browser is a courtesy, the server is the rule. */
@@ -539,43 +547,43 @@ function missingBits(v){
   var got = (S.card && S.card.photos) || {}, out = [];
   if (!got.Before) out.push('the before photo');
   if (!got.After)  out.push('the after photo');
-  if (!(S.card && S.card.colour)) out.push('the colour she had');
+  if (!(S.card && S.card.color)) out.push('the color she had');
   return out;
 }
 
 /* ── WHAT COLOUR SHE HAD ────────────────────────────────────────────────────
-   A photograph of the colour is not a record of it. This is the bit a returning client
+   A photograph of the color is not a record of it. This is the bit a returning client
    actually asks for by name. */
-function colourHtml(v){
-  var done = S.card && S.card.colour;
-  return '<div class="lbl">The colour she had</div>'
+function colorHtml(v){
+  var done = S.card && S.card.color;
+  return '<div class="lbl">The color she had</div>'
     + (done
         ? '<div class="note"><b>'+esc(done)+'</b><br>'
-          + '<button class="linkbtn" onclick="openColour()">Change it</button></div>'
-        : '<button class="sigbtn" style="width:100%" onclick="openColour()">'
-          + ICON.plus+'Record the colour</button>');
+          + '<button class="linkbtn" onclick="openColor()">Change it</button></div>'
+        : '<button class="sigbtn" style="width:100%" onclick="openColor()">'
+          + ICON.plus+'Record the color</button>');
 }
-function openColour(){
+function openColor(){
   $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>The colour she had</h3>'
+  $('veil').innerHTML = '<div class="alert"><h3>The color she had</h3>'
     + '<p class="lede">Brand and shade, so the next person can match it without guessing.</p>'
     + '<input class="in" id="colbrand" placeholder="Brand (OPI, Gelish…)" autocomplete="off">'
     + '<input class="in" id="colname" placeholder="Shade name or number" autocomplete="off" style="margin-top:8px">'
-    + '<button class="btn" id="colgo" style="margin-top:12px">Save the colour</button>'
+    + '<button class="btn" id="colgo" style="margin-top:12px">Save the color</button>'
     + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Not now</button></div>';
   $('colgo').onclick = function(){
     var name = ($('colname').value||'').trim();
-    if (!name) return toast('Which colour? At least the name or number.','err');
+    if (!name) return toast('Which color? At least the name or number.','err');
     var b = $('colgo'); b.disabled = true; b.innerHTML = 'Saving…';
-    api('techColour', { token:S.token, key:S.key, brand:($('colbrand').value||'').trim(), name:name })
+    api('techColor', { token:S.token, key:S.key, brand:($('colbrand').value||'').trim(), name:name })
       .then(function(r){
-        shutVeil(); toast('Colour saved — ' + r.label);
+        shutVeil(); toast('Color saved — ' + r.label);
         /* Re-read the card so the finish gate sees it immediately — otherwise she saves the
-           colour and the button still tells her it is missing. */
+           color and the button still tells her it is missing. */
         return api('techClient', { token:S.token, key:S.key });
       })
       .then(function(c){ if (c) { S.card = c; render(); } })
-      ['catch'](function(e){ b.disabled = false; b.innerHTML = 'Save the colour'; toast(e.message,'err'); });
+      ['catch'](function(e){ b.disabled = false; b.innerHTML = 'Save the color'; toast(e.message,'err'); });
   };
 }
 
@@ -735,12 +743,12 @@ function takePhoto(label){
   };
   i.click();
 }
-/* DOWNSCALED IN THE BROWSER, ALWAYS — but this is the salon's colour record, so the
+/* DOWNSCALED IN THE BROWSER, ALWAYS — but this is the salon's color record, so the
    settings are chosen for that and not just for the wire.
 
    1600px on the long edge at quality 0.88. A 12MP phone photo is 3–6MB and would not fit
    through Apps Script at all; 1200/0.82 fit comfortably but lost the free-edge line and put
-   visible blocking into saturated reds and chrome, which are precisely the colours anyone
+   visible blocking into saturated reds and chrome, which are precisely the colors anyone
    opens these photos to check. 1600/0.88 is roughly double the bytes — a few hundred KB —
    and holds glitter and chrome texture. Well inside the 3MB the server accepts.
 
@@ -788,15 +796,25 @@ var VOCAB = [
   { group:'Shape',  items:['Almond','Coffin','Square','Squoval','Stiletto','Round'] },
   { group:'Length', items:['Short','Medium','Long','Extra long'] },
   { group:'System', items:['Structure gel','Gel-X','Builder','Dip','Acrylic','Polish'] },
-  { group:'Colour', items:['Nudes','Reds','French','Chrome','Milky','Dark'] },
+  { group:'Color',  items:['Nudes','Reds','French','Chrome','Milky','Dark'] },
   { group:'Care',   items:['Sensitive skin','Light pressure','Thin nails','Cuticle care'], standing:true },
-  { group:'Manner', items:['Prefers quiet','Chatty','Runs late','Brings her mum'], standing:true }
+  { group:'Manner', items:['Prefers quiet','Chatty','Runs late','Brings a guest'], standing:true }
 ];
+
+/* THE SALON'S OWN WORDS WIN. The list above is only what a phone shows before its first
+   answer arrives — every poll carries the vocabulary the owner actually keeps in Settings,
+   so a word he retires disappears from the chair and a word he adds turns up there. The
+   chair used to be frozen to the list above, which is why it kept offering words that had
+   been corrected weeks earlier. */
+function vocabGroups(){
+  return (S.vocab && S.vocab.length) ? S.vocab : VOCAB;
+}
 var COMP = { kind:'note', picked:{} };
 function openCompose(kind){
   COMP = { kind:kind, picked:{} };
   var mk = kind==='mk';
-  var groups = mk ? VOCAB.filter(function(g){ return g.standing; }) : VOCAB;
+  var all = vocabGroups();
+  var groups = mk ? all.filter(function(g){ return g.standing; }) : all;
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>'+(mk?'Add a must-know':'Write a note')+'</h3>'
     + '<p class="lede">'+(mk?'A lasting fact about her care. Everyone sees it on her card, every visit.'
@@ -1012,13 +1030,16 @@ function visitName(rowKey){
 function mine(e){ return e.who !== S.tech && e.type.indexOf('HELP') !== 0; }
 
 function paintAlert(){
-  var el = $('veil'), pend = unseen();
+  /* #alertveil, never #veil. This used to reach for the same element the composer uses, and
+     the very next poll — four seconds later — set its className back to closed. The
+     must-know box vanished mid-sentence, which read as the app refusing to open it. */
+  var el = $('alertveil'), pend = unseen();
   if (!pend.length){ el.className='veil'; S.shownIds=[]; return; }
   var wasOpen = el.classList.contains('on');
   var fresh = wasOpen ? pend.filter(function(e){ return S.shownIds.indexOf(e.id)<0; }).map(function(e){return e.id;}) : [];
   S.shownIds = pend.map(function(e){ return e.id; });
   el.className = 'veil on';
-  el.innerHTML = '<div class="alert"><div class="hd">'+ICON.bell+'From the front desk · '
+  el.innerHTML = '<div class="alert"><div class="hd"><img src="'+LOGO+'" alt="" class="hdmark">From the front desk · '
     + pend.length+(pend.length>1?' updates':' update')+'</div>'
     + pend.slice().reverse().map(function(e){
         return '<div class="item'+(fresh.indexOf(e.id)>=0?' fresh':'')+'">'+evText(e)
@@ -1036,7 +1057,7 @@ function ackShown(){
 function openBell(){
   var el=$('veil');
   el.className='veil on';
-  el.innerHTML = '<div class="alert"><div class="hd">'+ICON.bell+'From the front desk</div>'
+  el.innerHTML = '<div class="alert"><div class="hd"><img src="'+LOGO+'" alt="" class="hdmark">From the front desk</div>'
     + (FEED.length ? FEED.slice().reverse().slice(0,14).map(function(e){
         return '<div class="item">'+(S.seen[e.id]?'':'<b style="color:var(--gold)">NEW </b>')
           + evText(e)+'<div class="who">'+esc(e.who||'')+'</div></div>'; }).join('')
@@ -1194,6 +1215,7 @@ function refresh(quiet){
     REFRESHING = false;
     pollTrouble(false);
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
+    if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
     if (absorb(r)) { refresh(quiet); return; }     // the day rolled: start it from zero
     render(); paintAlert(); refreshBell();
