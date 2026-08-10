@@ -793,12 +793,17 @@ function viaImg(file, paint){
 /* ── the composers. Same vocabulary the desk taps, so one visit reads the same whoever
       wrote it down. Care and Manner stay on her card; the rest belong to today. ── */
 var VOCAB = [
-  { group:'Shape',  items:['Almond','Coffin','Square','Squoval','Stiletto','Round'] },
-  { group:'Length', items:['Short','Medium','Long','Extra long'] },
-  { group:'System', items:['Structure gel','Gel-X','Builder','Dip','Acrylic','Polish'] },
-  { group:'Color',  items:['Nudes','Reds','French','Chrome','Milky','Dark'] },
-  { group:'Care',   items:['Sensitive skin','Light pressure','Thin nails','Cuticle care'], standing:true },
-  { group:'Manner', items:['Prefers quiet','Chatty','Runs late','Brings a guest'], standing:true }
+  /* THE SALON'S OWN WORDS, copied from the desk's CHIPS list, which Trung corrected on
+     2026-08-02. The phone had shipped with a generic nail-industry list instead — Squoval,
+     Dip, Acrylic, Milky, "Brings her mum" — words Artonus does not use and a technician
+     would type around, which is how a book fills up with free text. This is only the list a
+     phone shows before its first answer arrives; the live vocabulary rides every poll. */
+  { group:'Shape',  items:['Coffin','Almond','Square','Round','Stiletto','Oval'] },
+  { group:'Length', items:['Short','Medium','Long'] },
+  { group:'System', items:['Signature','Structure','Gel-X','Builder gel','Classic gel','Regular polish'] },
+  { group:'Color',  items:['Nudes','Reds','Pinks','Darks','Brights','French','Chrome','Glitter'] },
+  { group:'Care',   items:['Light pressure','Sensitive skin','Thin nails','Bites nails','Needs a cushion'], standing:true },
+  { group:'Manner', items:['Prefers quiet','Chatty','Runs late','Books ahead','Brings kids'], standing:true }
 ];
 
 /* THE SALON'S OWN WORDS WIN. The list above is only what a phone shows before its first
