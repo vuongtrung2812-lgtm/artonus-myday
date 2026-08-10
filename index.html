@@ -198,6 +198,14 @@
   /* The salon's own mark in the alert header, not a stock bell. A technician sees this a
      dozen times a day; it should look like it belongs to Artonus. */
   .alert .hd .hdmark{height:16px;width:auto;margin-right:8px;vertical-align:-3px;opacity:.95}
+  /* The running list of what this chair has already told the desk. */
+  .sentbar{display:flex;gap:9px;align-items:flex-start;background:var(--ok-soft);
+    border:1px solid var(--ok);border-radius:12px;padding:10px 12px;margin:0 0 10px;
+    font-size:13.5px;line-height:1.45}
+  .sentbar svg{flex:none;stroke:var(--ok);margin-top:2px}
+  .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+  .sigbtn.sent svg{stroke:var(--ok)}
+  .sigbtn:disabled{opacity:1;cursor:default}
 </style>
 </head>
 <body>
@@ -455,23 +463,47 @@ function chairCard(v){
   h += colorHtml(v);
   h += svcHtml(v);
 
-  h += '<div class="lbl">Need more time?</div><div class="sigrow">'
+  h += sentBar(v);
+
+  /* THE STANDING REQUEST, SHOWN. The chips reflect what the desk is already holding and stay
+     tappable so she can change the number — the demo deliberately does not disable them.
+     Enter in the box sends, because a technician with one dry hand should not have to hunt
+     for a button. */
+  h += '<div class="lbl">Need more time?</div>'
+    + (v.moreTime ? '<div class="note" style="margin-bottom:8px">'+ICON.check
+        + ' The desk knows — you asked for <b>+'+v.moreTime+' min</b>. Send a new number to change it.</div>' : '')
+    + '<div class="sigrow">'
     + [10,15,30].map(function(m){
-        return '<button class="sigbtn" data-mt="'+m+'">'+ICON.clock+'+'+m+' min</button>'; }).join('')
+        var on = Number(v.moreTime) === m;
+        return '<button class="sigbtn'+(on?' sent':'')+'" data-mt="'+m+'">'
+          + (on?ICON.check:ICON.clock)+'+'+m+' min</button>'; }).join('')
     + '</div>'
     + '<div class="row2"><input class="in mtnum" id="mtnum" type="text" inputmode="numeric" '
     + 'pattern="[0-9]*" placeholder="Or type the minutes" style="margin:0">'
-    + '<button class="skip" id="mtgo">'+ICON.clock+' Send</button></div>'
-    + (v.moreTime ? '<p class="hint">The desk is holding <b>+'+v.moreTime+' min</b> for you. '
-        + 'Sending again replaces it — it never adds up.</p>' : '');
+    + '<button class="skip" id="mtgo">'+ICON.clock+' Send</button></div>';
 
+  /* Derived from the visit, not stamped on the button — the poll re-renders a second later
+     and a stamped tick died with it, which reads as "it did not send". */
   h += '<div class="lbl">Almost finished?</div><div class="sigrow">'
-    + '<button class="sigbtn" data-sig="ALMOST_DONE">'+ICON.clock+'Tell the desk — almost done</button></div>';
+    + '<button class="sigbtn'+(v.almost?' sent':'')+'"'+(v.almost?' disabled':'')+' data-sig="ALMOST_DONE">'
+    + (v.almost ? ICON.check+'Desk notified' : ICON.clock+'Tell the desk — almost done')
+    + '</button></div>';
 
   if (can('tech.serviceChange')){
+    var tierNow = String(v.tier || '');
+    h += '<div class="lbl">Design tier</div><div class="sigrow">'
+      + ['Tier 1','Tier 2','Tier 3'].map(function(t){
+          var on = tierNow === t;
+          return '<button class="sigbtn'+(on?' sent':'')+'" data-tier="'+esc(t)+'">'
+            + (on?ICON.check:ICON.star)+esc(t)+'</button>'; }).join('')
+      + '</div>';
+
+    var sentCamps = v.campaigns || [];
     h += '<div class="lbl">She is interested in</div><div class="sigrow">'
       + ['Rebooking discount','Referral cards'].map(function(n){
-          return '<button class="sigbtn" data-camp="'+esc(n)+'">'+ICON.star+esc(n)+'</button>'; }).join('')
+          var on = sentCamps.indexOf(n) >= 0;
+          return '<button class="sigbtn'+(on?' sent':'')+'"'+(on?' disabled':'')+' data-camp="'+esc(n)+'">'
+            + (on?ICON.check:ICON.star)+esc(n)+'</button>'; }).join('')
       + '</div>';
   }
 
@@ -549,6 +581,28 @@ function missingBits(v){
   if (!got.After)  out.push('the after photo');
   if (!(S.card && S.card.color)) out.push('the color she had');
   return out;
+}
+
+/**
+ * WHAT THE DESK ALREADY HAS.
+ *
+ * The demo's answer to a problem a stamped tick solves badly: one bar at the top of the
+ * chair card listing everything already sent for this visit. She sees at a glance that her
+ * +15 went, so she does not send it twice — and the desk does not get a second request it
+ * has to work out the meaning of.
+ */
+function sentBar(v){
+  var s = [];
+  if (v.moreTime) s.push('+' + v.moreTime + ' min');
+  (v.addons || []).forEach(function(a){ s.push((a && (a.label || a.name)) || ''); });
+  if (v.tier) s.push(v.tier);
+  (v.campaigns || []).forEach(function(c){ s.push(c); });
+  if (v.almost) s.push('almost done');
+  s = s.filter(Boolean);
+  if (!s.length) return '';
+  return '<div class="sentbar">'+ICON.check
+    + '<div><b>Sent to the front desk</b><br><span class="quiet">'
+    + s.map(esc).join(' · ')+'</span></div></div>';
 }
 
 /* ── WHAT COLOUR SHE HAD ────────────────────────────────────────────────────
@@ -645,7 +699,13 @@ function openAddon(){
     + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
     + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
   withMenu(function(m){
-    $('addlist').innerHTML = (m.addons||[]).map(function(a){
+    /* Only this chair's family. All seven used to be offered everywhere, told apart by
+       "(pedicure)" in the label — so a manicure chair was shown Gel and Removal, which mean
+       something else there, and the parenthetical rode along onto the desk's ticket. */
+    var fam = /pedicure/i.test(String((S.visit && S.visit.svc) || '')) ? 'pedicure' : 'manicure';
+    var list = (m.addons||[]).filter(function(a){ return !a.family || a.family === fam; });
+    $('addlist').innerHTML = '<p class="lede" style="margin:0 0 6px">For a <b>'+fam+'</b>.</p>'
+      + list.map(function(a){
       return '<div class="row2" style="margin-top:8px">'
         + '<button class="pick" data-add="'+esc(a.name)+'" style="flex:1"><b>'+esc(a.label)+'</b>'
         + '<span class="quiet">'+(a.price?money(a.price)+(a.per?' per '+a.per:''):'no extra charge')+'</span></button>'
@@ -982,16 +1042,22 @@ function wireChair(v){
   Array.prototype.forEach.call(document.querySelectorAll('[data-mt]'), function(b){
     b.onclick = function(){ sig('MORE_TIME', { mins:Number(b.getAttribute('data-mt')) }, b); };
   });
-  if ($('mtgo')) $('mtgo').onclick = function(){
+  function sendTyped(){
     var n = Number(($('mtnum').value||'').replace(/\D/g,''));
     if (!(n>=5 && n<=120)){ toast('Between 5 and 120 minutes.','err'); return; }
     sig('MORE_TIME', { mins:n }, $('mtgo'));
-  };
+  }
+  if ($('mtgo')) $('mtgo').onclick = sendTyped;
+  /* Enter sends. She has one dry hand and the button is the width of a thumb away. */
+  if ($('mtnum')) $('mtnum').onkeydown = function(e){ if (e.key === 'Enter'){ e.preventDefault(); sendTyped(); } };
   Array.prototype.forEach.call(document.querySelectorAll('[data-sig]'), function(b){
     b.onclick = function(){ sig(b.getAttribute('data-sig'), {}, b); };
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-camp]'), function(b){
     b.onclick = function(){ sig('CAMPAIGN_INTEREST', { name:b.getAttribute('data-camp') }, b); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tier]'), function(b){
+    b.onclick = function(){ sig('TIER_CHANGE', { to:b.getAttribute('data-tier') }, b); };
   });
   if ($('finish')) $('finish').onclick = function(){ sig('FINISHED', {}, $('finish')); };
   wirePhotos();
