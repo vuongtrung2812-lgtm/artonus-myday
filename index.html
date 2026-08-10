@@ -76,6 +76,13 @@
     display:inline-flex;align-items:center;justify-content:center;gap:7px}
   /* EVERY icon, sized and stroked, once. An SVG that misses its rule renders at the
      browser's default box with a filled path — which is how "Send" became a black blob. */
+  /* EVERY inline icon has a size, whatever it sits in. An <svg> with a viewBox and no width
+     expands to fill its container, so an icon dropped into a plain <div> renders the height
+     of the card and shoves the text off the screen — which happened twice in one evening,
+     once in the design-brief panel and once in the more-time note. The rules below are all
+     more specific and still win; this is only the floor. */
+  svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;
+      stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
   button svg,.pill svg,.tag svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
     stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .btn svg{width:17px;height:17px}
