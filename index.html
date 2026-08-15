@@ -1451,6 +1451,42 @@ function openBell(){
     + '</div></div>';
 }
 function shutVeil(){ var v=$('veil'); v.className='veil'; v.innerHTML=''; }
+
+/* ══════════════ CLOSING AN OVERLAY, AND WHEN NOT TO ══════════════
+ *
+ * Until now every dialog on this phone could only be closed by finding and tapping its own
+ * Cancel button. Tapping the dark area around it — which is what a phone user does without
+ * thinking — did nothing at all, and the dialog just sat there.
+ *
+ * TWO THINGS IT MUST NOT DO.
+ *
+ * It must not close #alertveil. That is the desk talking to her, and the whole reason it is a
+ * full-screen block is that she has to see it. An overlay she can dismiss with a stray thumb
+ * is an overlay that gets dismissed unread, which is the failure this app exists to prevent.
+ *
+ * It must not throw away something she has typed. A half-written note is work; a stray tap on
+ * the backdrop is not an instruction to bin it. So a dialog with anything typed into it stays
+ * open and says which button actually discards. Cancel still does, deliberately and by name.
+ */
+function veilHasTyping(v){
+  return Array.prototype.some.call(v.querySelectorAll('input,textarea'), function (i) {
+    return String(i.value || '').trim() !== '';
+  });
+}
+function tryShutVeil(){
+  var v = $('veil');
+  if (!v || v.className.indexOf('on') < 0) return false;
+  if (veilHasTyping(v)){ toast('Tap Cancel if you want to throw that away.'); return true; }
+  shutVeil();
+  return true;
+}
+/* The tap has to land on the backdrop ITSELF. Anywhere inside the dialog bubbles up to here
+   too, and closing on that would make every button in it also a Cancel. */
+$('veil').addEventListener('click', function(e){ if (e.target === $('veil')) tryShutVeil(); });
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape' && e.key !== 'Esc') return;
+  if (tryShutVeil()) e.preventDefault();
+});
 function ackAll(){ FEED.forEach(function(e){ S.seen[e.id]=true; }); shutVeil(); refreshBell(); render(); }
 function refreshBell(){
   var el = document.querySelector('.bellcount'); if (!el) return;
@@ -1555,7 +1591,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '337550a29748';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '56d28d44a3d9';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
