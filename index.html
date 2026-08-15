@@ -129,6 +129,10 @@
   .tag.done{background:var(--line);color:var(--muted)}
   .tag.walk{background:var(--warn-soft);color:var(--warn)}
   .flag{background:var(--err-soft);border:1px solid var(--err-line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+    /* A must-know she has confirmed stops shouting, so the unread ones stand out. */
+    .flag--read{background:var(--card);border-color:var(--line)}
+    .btn--ack{margin-top:8px;padding:8px 14px;font-size:14px;min-height:40px;background:var(--err);border-color:var(--err);color:#fff}
+    .ackdone{margin-top:6px;font-size:13px;color:var(--ok);font-weight:600}
   .flag .k{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;font-weight:900;color:var(--err)}
   .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px;font-size:13.5px}
   .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
@@ -478,6 +482,26 @@ function viewToday(){
   $('app').innerHTML = h;
 }
 
+/**
+ * Record that she has read a must-know.
+ *
+ * The button is disabled the instant it is pressed, before the request leaves: a second tap
+ * while the first is in flight is the ordinary way a duplicate row gets written. The server
+ * refuses a duplicate as well, so this is the belt and the braces.
+ */
+function ackFlag(id, btn){
+  if (btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  api('techAck', { token: S.token, key: S.key, id: id })
+    .then(function(){
+      toast(' Thank you — that is written down.', null, ICON.check);
+      openVisit(S.key);          /* re-reads the card, so the row flips to "You have read this" */
+    })
+    ['catch'](function(e){
+      if (btn){ btn.disabled = false; btn.textContent = 'I read this'; }
+      toast(e.message, 'err');
+    });
+}
+
 /* ─────────────────────────── the visit ─────────────────────────── */
 function openVisit(key){
   S.key = key;
@@ -633,9 +657,18 @@ function cardHtml(){
       + '<span class="quiet">· '+c.tally.n+' visits, past year</span></div>';
 
   (c.flags||[]).forEach(function(f){
-    h += '<div class="flag"><div class="k">'+esc(f.cls)+'</div>'+esc(f.text)
+    /* SHE CONFIRMS SHE READ IT. Until now a must-know was something to look at and nothing
+       recorded that anyone had. The desk could already see who had read what — the phone
+       simply never wrote a row. A read one goes quiet so the unread ones are the loud ones. */
+    var read = f.readByMe;
+    h += '<div class="flag'+(read?' flag--read':'')+'"><div class="k">'+esc(f.cls)+'</div>'+esc(f.text)
       + '<div class="note by" style="background:none;border:0;padding:4px 0 0;margin:0">'
-      + esc(f.author)+' · '+esc(f.when)+'</div></div>';
+      + esc(f.author)+' · '+esc(f.when)
+      + ((f.readBy||[]).length ? ' · read by '+esc(f.readBy.join(', ')) : '')
+      + '</div>'
+      + (read ? '<div class="ackdone">You have read this</div>'
+              : '<button class="btn btn--ack" onclick="ackFlag(\''+esc(f.id)+'\',this)">I read this</button>')
+      + '</div>';
   });
 
   h += '<div class="card"><h3>Must-knows</h3><div class="chips">'
