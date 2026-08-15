@@ -183,6 +183,13 @@
     z-index:200;display:none;max-width:calc(100% - 32px);box-shadow:0 12px 30px rgba(43,11,0,.35)}
   .toast.on{display:block}
   .toast.err{background:var(--err)}
+  /* The page could not update itself. Pinned to the top, not a toast, because the one thing
+     she must not do is glance past it — she would carry on working from code we have already
+     replaced. Kept below #offline, which is the more urgent of the two. */
+  .stale{position:fixed;left:0;right:0;top:0;z-index:98;background:var(--gold);color:#2B0B00;
+    padding:calc(9px + env(safe-area-inset-top)) 14px 9px;font-size:12.5px;font-weight:800;
+    line-height:1.45;display:none;text-align:center}
+  .stale.on{display:block}
   .quiet{color:var(--muted)}
   .mtnum::-webkit-outer-spin-button,.mtnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   #offline{position:fixed;left:0;right:0;top:0;z-index:99;background:#8a1c1c;color:#fff;
@@ -282,6 +289,9 @@
      must-know box every few seconds and it could not be filled in at all. -->
 <div class="veil" id="alertveil"></div>
 <div class="toast" id="toast"></div>
+<!-- Shown only when the page could not update itself. It has to survive a re-render, so it
+     lives here beside the toast rather than inside #app. -->
+<div class="stale" id="stale"></div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -339,7 +349,13 @@ function toast(m,kind,icon){
  */
 var BOOK = 'https://script.google.com/macros/s/AKfycby0SWGq-PC702gm02TV8mzrOw36wV1jL6P4XlJxpfAvLYs_bzDJ03qGYzrcD74vwX80/exec';
 
+/* How many calls are in the air. Read by the updater below, which must never reload the page
+   out from under a photo that is still uploading. */
+var INFLIGHT = 0;
+
 function api(name, payload){
+  INFLIGHT++;
+  var done = function(){ INFLIGHT = Math.max(0, INFLIGHT - 1); };
   return fetch(BOOK, {
     method: 'POST',
     redirect: 'follow',
@@ -347,6 +363,10 @@ function api(name, payload){
     body: JSON.stringify({ name: name, payload: payload || {} })
   }).then(function(r){
     return r.text();
+  }).then(function(t){
+    done(); return t;
+  }, function(e){
+    done(); throw e;
   }).then(function(t){
     var out;
     /* Apps Script answers an unauthenticated or broken call with an HTML page, not JSON.
@@ -1497,7 +1517,98 @@ document.addEventListener('visibilitychange', function(){
   refresh(true);
   pollHot();                      // she just picked the phone up: she is about to do something
   listen();                       // a backgrounded phone usually has its socket cut
+  checkBuild();                   // and it is the cheapest moment to find out she is out of date
 });
+
+/* ══════════════════════ KEEPING THIS PAGE UP TO DATE ══════════════════════
+ *
+ * MEASURED, 2026-08-15. A fix went live on the server at 05:49:59 and the page was published
+ * at 05:50:31. A test run at 05:53:11 — nearly three minutes later — still showed the old
+ * behaviour, and the report back was "it did not work".
+ *
+ * Two reasons, and neither is fixable at the server:
+ *   1. GitHub Pages serves this file with `cache-control: max-age=600`. A phone that fetched
+ *      it a minute before the deploy keeps that copy for ten more minutes and does not ask.
+ *      Pages does not let us set that header.
+ *   2. A tab left open never re-fetches anything. The old code stays in memory all day.
+ *
+ * So the page checks for itself. `build.txt` is a few bytes, published in the same commit as
+ * this file, and read with `cache: 'no-store'` so it is never the cached one. When it names a
+ * build we are not running, we reload — through a NEW URL (`?v=`), because reloading the same
+ * URL is served the same stale copy and would change nothing.
+ *
+ * WHY IT WAITS. Reloading the instant an update appears would throw away a half-typed note or
+ * cut a photo that is still uploading. So it waits for a moment when she has nothing open and
+ * nothing in the air.
+ *
+ * WHY IT GIVES UP. If a reload does not land on the new build, reloading again produces an
+ * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
+ * plainly what to do.
+ */
+var BUILD = '817c28739a23';                  /* stamped by _stamp_build.py — never edit by hand */
+var PENDING_BUILD = '', UPDT = null;
+
+function buildTried(b){
+  try { return sessionStorage.getItem('artonus_build_try') === b; } catch (e) { return false; }
+}
+function markBuildTried(b){
+  try { sessionStorage.setItem('artonus_build_try', b); } catch (e) {}
+}
+
+function checkBuild(){
+  if (PENDING_BUILD) return;                       // already know; waiting for a safe moment
+  /* Absolute, not relative. A page opened at a deeper path — the enrolment links were once
+     /e/<code> — would resolve a relative name to /e/build.txt, get a 404, and silently never
+     update again. A check that fails quietly is worse than no check. */
+  fetch('/build.txt?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(function(t){
+      var b = String(t || '').trim().slice(0, 40);
+      if (!b || b === BUILD) return;
+      if (buildTried(b)){
+        /* We already reloaded for this one and came back running the old code. Reloading
+           again would just do it forever. Say it once, in words she can act on. */
+        stuckOnOldBuild();
+        return;
+      }
+      PENDING_BUILD = b;
+      applyUpdateWhenSafe();
+    })['catch'](function(){ /* offline is not out of date; try again next time */ });
+}
+
+function safeToReload(){
+  if (INFLIGHT > 0) return false;                                  // a call is still in the air
+  var v = $('veil'), av = $('alertveil');
+  if (v && v.className.indexOf('on') >= 0) return false;           // a dialog is open
+  if (av && av.className.indexOf('on') >= 0) return false;         // an alert is up, unread
+  if (document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))
+    return false;                                                  // she is typing
+  return true;
+}
+
+function applyUpdateWhenSafe(){
+  clearTimeout(UPDT);
+  if (!PENDING_BUILD) return;
+  if (!safeToReload()){ UPDT = setTimeout(applyUpdateWhenSafe, 3000); return; }
+  markBuildTried(PENDING_BUILD);
+  toast('Updating the app…', null, ICON.check);
+  var b = PENDING_BUILD;
+  /* replace(), not assign(): the old copy must not sit in her back history, or the back
+     button walks her straight into the version we just replaced. */
+  setTimeout(function(){ location.replace(location.pathname + '?v=' + encodeURIComponent(b)); }, 700);
+}
+
+function stuckOnOldBuild(){
+  var el = $('stale');
+  if (!el || el.className === 'stale on') return;
+  el.className = 'stale on';
+  el.textContent = 'This app is out of date and could not update itself. Close it completely and open it again.';
+}
+
+/* Three minutes. Frequent enough that a fix reaches a chair within one client, small enough
+   that it is a handful of bytes an hour. The visibility hook above covers the phone that has
+   been in a pocket, which is the common case. */
+setInterval(checkBuild, 180000);
 
 /**
  * What a techPoll answer means for the feed — in ONE place, because opening the app and
@@ -1593,6 +1704,10 @@ function render(){
 setInterval(function(){ if (S.token && S.help) render(); }, 1000);
 
 (function boot(){
+  /* A few seconds after the day is on screen, not before it. Her chair is the urgent thing;
+     whether this page is the newest one is not, and a phone that opens straight into a
+     reload feels broken even when it is working correctly. */
+  setTimeout(checkBuild, 5000);
   var t = loadToken();
   if (!t){ S.view='enrol'; render(); return; }
   S.token = t; loadDay(); listen();
