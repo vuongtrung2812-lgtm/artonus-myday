@@ -659,10 +659,9 @@ function chairCard(v){
         + 'Saved: <span class="stars">'+'★★★★★'.slice(0,S.card.rated.stars)+'</span></p>'
       : '<button class="btn" style="margin-top:14px" onclick="openRating()">'+ICON.star+'Rate the visit</button>';
   } else {
-    /* All three, not just the before photo — and the same three the SERVER checks, so the
-       button and the refusal can never disagree. The button says what is outstanding rather
-       than sitting dead with no explanation. */
-    var short = missingBits(v);
+    /* Straight from the server, so the button and the refusal cannot disagree. It says what
+       is outstanding rather than sitting dead with no explanation. */
+    var short = missingBits();
     h += '<button class="btn" id="finish" style="margin-top:14px"'+(short.length?' disabled':'')+'>'
       + (short.length ? 'Still needed: ' + short.join(', ') : 'She is finished') + '</button>';
   }
@@ -743,14 +742,18 @@ function cardHtml(){
    Color are what the next technician needs when she comes back in five weeks. */
 var REQ = ['Before','After','Color'];
 
-/* What is still outstanding before this visit can be closed. Mirrors finishBlockers_ on the
-   server word for word — the browser is a courtesy, the server is the rule. */
-function missingBits(v){
-  var got = (S.card && S.card.photos) || {}, out = [];
-  if (!got.Before) out.push('the before photo');
-  if (!got.After)  out.push('the after photo');
-  if (!(S.card && S.card.color)) out.push('the color she had');
-  return out;
+/* What is still outstanding before this visit can be closed.
+ *
+ * TAKEN FROM THE SERVER, not worked out again here. This used to be a second copy of
+ * finishBlockers_ with a comment promising it matched "word for word" — and the day the rule
+ * changed it did not, which is what a promise in a comment is worth. The server ships the
+ * list on the card; the button prints it.
+ *
+ * A card that has not arrived yet is not the same as a visit with nothing outstanding, so it
+ * says so rather than offering a button that would be refused. */
+function missingBits(){
+  if (!S.card) return ['her card to open'];
+  return S.card.missing || [];
 }
 
 /**
@@ -817,7 +820,14 @@ function colorHtml(v){
         ? '<div class="note"><b>'+esc(done)+'</b><br>'
           + '<button class="skip" style="margin-top:8px" onclick="openColor()">Change it</button></div>'
         : '<button class="sigbtn" style="width:100%" onclick="openColor()">'
-          + ICON.plus+'Record the color</button>');
+          + ICON.plus+'Record the color</button>'
+          /* It used to block the close-out and no longer does — Trung, 2026-08-15. A
+             technician standing over a finished client, told she cannot close out until she
+             types a shade number she may have to go and find, types anything, and a field
+             full of guesses is worse than an empty one. Saying why it is worth doing works
+             better than making it compulsory. */
+          + '<p class="lede" style="margin:6px 0 0">Not needed to close her out. It is the one '
+          + 'thing she asks for by name when she comes back.</p>');
 }
 function openColor(){
   $('veil').className = 'veil on';
@@ -1545,7 +1555,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '817c28739a23';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '337550a29748';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
