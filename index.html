@@ -220,6 +220,20 @@
      expands to fill its box — the design-brief star rendered the height of the card and shoved
      the text off the screen. flex:none stops it being squashed; it does not give it a size. */
   .sentbar svg{flex:none;stroke:var(--ok);margin-top:2px;width:16px;height:16px}
+  /* THE RECEIPT. "Sent" is not an answer — she needs to know somebody at the desk BOOKED the
+     fifteen minutes. Amber while nobody has answered, and the clock keeps running so she can
+     decide for herself when to go and ask. */
+  .sentbar.waiting{background:var(--gold-soft);border-color:var(--gold)}
+  .sentbar.waiting svg{stroke:var(--gold)}
+  .sentbar .rows{width:100%}
+  .sentbar .r{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+    padding:4px 0;border-top:1px solid rgba(0,0,0,.06)}
+  .sentbar .r:first-child{border-top:none;padding-top:0}
+  .sentbar .r .what{font-weight:700}
+  .sentbar .r .st{flex:none;font-size:11.5px;font-weight:800;letter-spacing:.3px;
+    text-transform:uppercase;color:var(--ok)}
+  .sentbar .r .st.wait{color:var(--gold)}
+  .sentbar .r .st.late{color:var(--err)}
   .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
   .sigbtn.sent svg{stroke:var(--ok)}
   .sigbtn:disabled{opacity:1;cursor:default}
@@ -402,6 +416,9 @@ function loadDay(){
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
     if (S.session !== s) return;
     REFRESHING = false; pollTrouble(false);
+    /* When this answer was taken, so the waiting clock on a receipt can keep running between
+       polls without trusting this phone's own idea of what time it is. */
+    S.pollAt = Date.now();
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
@@ -717,25 +734,57 @@ function missingBits(v){
 }
 
 /**
- * WHAT THE DESK ALREADY HAS.
+ * WHAT THE DESK ALREADY HAS — AND WHAT IT HAS ACTUALLY DONE.
  *
- * The demo's answer to a problem a stamped tick solves badly: one bar at the top of the
- * chair card listing everything already sent for this visit. She sees at a glance that her
- * +15 went, so she does not send it twice — and the desk does not get a second request it
- * has to work out the meaning of.
+ * This bar used to say "Sent to the front desk" and list the things. Sent is not the thing
+ * she needs to know. If she asks for fifteen more minutes and nobody at the desk moves the
+ * schedule, her next client is already sitting in the waiting area and she is the last
+ * person in the building to find out. "Sent" told her nothing about that.
+ *
+ * So each line now carries the desk's own answer against it:
+ *   WAITING 3 MIN — nobody has touched it. The clock keeps running, and past five minutes it
+ *                   turns red, which is her cue to walk over rather than wait longer.
+ *   ROSA HAS IT   — somebody at the desk read it.
+ *   DONE · ROSA   — somebody at the desk did it. The only answer that ends the question.
+ *
+ * "She is in the chair" and "almost finished" never need doing, so being read is the whole
+ * receipt for those and they never go red.
  */
+function waitedText(sec){
+  if (sec < 60) return 'Waiting';
+  var m = Math.floor(sec / 60);
+  return 'Waiting ' + m + ' min';
+}
 function sentBar(v){
-  var s = [];
-  if (v.moreTime) s.push('+' + v.moreTime + ' min');
-  (v.addons || []).forEach(function(a){ s.push((a && (a.label || a.name)) || ''); });
-  if (v.tier) s.push(v.tier);
-  (v.campaigns || []).forEach(function(c){ s.push(c); });
-  if (v.almost) s.push('almost done');
-  s = s.filter(Boolean);
-  if (!s.length) return '';
-  return '<div class="sentbar">'+ICON.check
-    + '<div><b>Sent to the front desk</b><br><span class="quiet">'
-    + s.map(esc).join(' · ')+'</span></div></div>';
+  var sent = v.sent || [];
+  if (!sent.length) return '';
+  /* The server sends how long each one has been waiting, measured on ITS clock — a phone
+     whose clock is a few minutes out would otherwise tell her she has been waiting since
+     before she asked. We add only the time since the answer arrived. */
+  var drift = Math.max(0, Math.round((Date.now() - (S.pollAt || Date.now())) / 1000));
+  var anyLate = false;
+  var rows = sent.map(function(x){
+    var st, cls = '';
+    if (x.ack && x.ack.state === 'done'){ st = 'Done · ' + x.ack.by; }
+    else if (x.ack){ st = esc(x.ack.by) + ' has it'; }
+    else if (!x.needsDone){ st = 'Sent'; cls = ' wait'; }
+    else {
+      var sec = (x.waitedSec || 0) + drift;
+      cls = sec >= 300 ? ' late' : ' wait';
+      if (sec >= 300) anyLate = true;
+      st = waitedText(sec);
+    }
+    return '<div class="r"><span class="what">' + esc(x.label) + '</span>'
+      + '<span class="st' + cls + '">' + st + '</span></div>';
+  }).join('');
+  var open = sent.some(function(x){ return x.needsDone && !(x.ack && x.ack.state === 'done'); });
+  return '<div class="sentbar' + (open ? ' waiting' : '') + '">'
+    + (open ? ICON.clock : ICON.check)
+    + '<div class="rows"><b>' + (open ? 'Waiting on the front desk' : 'The front desk has it')
+    + '</b>' + rows
+    + (anyLate ? '<div class="r" style="border:0;padding-top:6px"><span class="quiet">'
+                 + 'Nobody has answered. Go and say it out loud.</span></div>' : '')
+    + '</div></div>';
 }
 
 /* ── WHAT COLOUR SHE HAD ────────────────────────────────────────────────────
@@ -1296,16 +1345,43 @@ function evText(e){
                        + (p.photos ? ' <span class="quiet">('+p.photos+' photo'
                           +(p.photos>1?'s':'')+' on her card)</span>' : '');
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
+    /* The desk finishing something she asked for. The row carries ids, not words, so the
+       words are looked up in the list the poll already handed us — the desk does not repeat
+       them on the wire and the two sides cannot drift apart in how they name a signal. */
+    case 'SIGNAL_ACK': var what = ackLabels(p.ids), by = '<b>'+esc(e.who||'The front desk')+'</b>';
+                       /* The fallback drops the "for", or an unresolved id reads "did what
+                          you asked for for Mai Tran". */
+                       return what ? by+' did it — <b>'+what+'</b> for '+nm
+                                   : by+' did what you asked — '+nm;
     default: return nm+' '+esc(e.type.toLowerCase().replace(/_/g,' '));
   }
+}
+/* Turn acknowledged signal ids back into the words she used, from the sent list on her own
+   visits. Anything not found is dropped rather than printed as a number. */
+function ackLabels(ids){
+  var want = {}, out = [];
+  (ids||[]).forEach(function(id){ want[id] = 1; });
+  (S.visits||[]).forEach(function(v){
+    (v.sent||[]).forEach(function(x){ if (want[x.id] && x.label) out.push(x.label); });
+  });
+  return out.map(esc).join(', ');
 }
 /* Events carry the hashed handle, not the raw key — so match on that. */
 function visitName(rowKey){
   var v = S.visits.filter(function(x){ return x.rowKey === rowKey; })[0];
   return v ? v.name : 'Your chair';
 }
-/* Only what the DESK sent her. Her own signals coming back would alert her about herself. */
-function mine(e){ return e.who !== S.tech && e.type.indexOf('HELP') !== 0; }
+/* Only what the DESK sent her. Her own signals coming back would alert her about herself.
+ *
+ * A "seen" receipt is deliberately NOT an alert. The desk presses "Got it" on a batch, often
+ * several times an hour, and a pop-up each time is how an alert stops being read at all —
+ * the one that matters then gets dismissed with the rest. Seen shows up quietly on her card,
+ * against the item. Only DONE interrupts her, because only done ends the question. */
+function mine(e){
+  if (e.who === S.tech || e.type.indexOf('HELP') === 0) return false;
+  if (e.type === 'SIGNAL_ACK') return ((e.payload||{}).state === 'done');
+  return true;
+}
 
 function paintAlert(){
   /* #alertveil, never #veil. This used to reach for the same element the composer uses, and
@@ -1492,6 +1568,7 @@ function refresh(quiet){
   api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
     REFRESHING = false;
     pollTrouble(false);
+    S.pollAt = Date.now();
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
