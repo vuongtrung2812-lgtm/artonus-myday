@@ -295,8 +295,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
 function money(n){ return '$' + (Math.round((Number(n)||0)*100)/100).toFixed(2); }
 
 var TOASTT;
-function toast(m,kind){
-  var t=$('toast'); t.innerHTML=m; t.className='toast on'+(kind==='err'?' err':'');
+/* The message is ESCAPED. This used to set innerHTML straight from the argument, and most
+   callers pass server text — every toast(e.message,'err'), the colour label, the service
+   name. A shade typed as markup would have run as markup. Our own icon markup goes in the
+   third argument, the only thing allowed through unescaped. */
+function toast(m,kind,icon){
+  var t=$('toast'); t.innerHTML=(icon||'')+esc(m); t.className='toast on'+(kind==='err'?' err':'');
   clearTimeout(TOASTT); TOASTT=setTimeout(function(){ t.className='toast'; }, kind==='err'?4200:2400);
 }
 
@@ -357,7 +361,7 @@ function viewEnrol(){
     var b=$('join'); b.disabled=true; b.textContent='Checking…';
     api('enrol', { code:c, agent:navigator.userAgent.slice(0,120) }).then(function(r){
       saveToken(r.token); S.token=r.token; S.tech=r.person; S.chair=r.chair;
-      toast(ICON.check+' Signed in as '+esc(r.person));
+      toast(' Signed in as '+r.person, null, ICON.check);
       loadDay();
     })['catch'](function(e){
       b.disabled=false; b.textContent='Use this phone'; toast(e.message,'err');
@@ -405,7 +409,12 @@ function loadDay(){
       + '<button class="btn" onclick="loadDay()">Try again</button></div>';
   });
 }
-function can(k){ return !S.caps.length || S.caps.some(function(c){ return c.key===k && c.on; }); }
+/* FAIL CLOSED. This used to read `!S.caps.length ||`, so an empty capability list — a poll
+   that had not returned yet, or one that failed — showed EVERY gated control. The server is
+   the real gate and would have refused, but the phone should not offer a button it may not
+   have. Empty is safe to treat as "no": capsList_() always returns the full list with the
+   defaults applied, so empty can only mean "not loaded". */
+function can(k){ return S.caps.some(function(c){ return c.key===k && c.on; }); }
 
 /**
  * WHAT CHANGED TODAY — moves and cancellations, said out loud.
@@ -868,7 +877,7 @@ function takePhoto(label){
     shrink(f, function(dataUrl){
       api('techPhoto', { token:S.token, key:S.key, label:label, data:dataUrl }).then(function(r){
         if (S.card) S.card.photos = r.photos;
-        toast(ICON.check+' '+label+' saved.'); render(); loadThumbs();
+        toast(' '+label+' saved.', null, ICON.check); render(); loadThumbs();
       })['catch'](function(e){ toast(e.message,'err'); });
     });
   };
@@ -1013,7 +1022,7 @@ function saveCompose(){
            she wrote arrived as "other" and never showed in red at the top of the card. */
         cls: mk ? (COMP.cls || 'other') : '',
         opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
-    shutVeil(); toast(ICON.check+' Saved to her card.');
+    shutVeil(); toast(' Saved to her card.', null, ICON.check);
     return api('techClient', { token:S.token, key:S.key });
   }).then(function(c){ if (c) S.card = c; render(); })
   ['catch'](function(e){ b.disabled=false; b.innerHTML = mk?'Save must-know':'Save note'; toast(e.message,'err'); });
@@ -1097,7 +1106,7 @@ function openRating(){
       var chips = Object.keys(why).concat(Object.keys(wrap));
       api('techRating', { token:S.token, key:S.key, stars:stars,
                           why:chips, note:($('rnote')||{value:''}).value }).then(function(){
-        shutVeil(); toast(ICON.check+' Saved. Thank you.');
+        shutVeil(); toast(' Saved. Thank you.', null, ICON.check);
         /* Re-pull the card, not just the day: without this her own rating is invisible until
            she leaves the screen and comes back, which reads as "it did not save". */
         api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })
@@ -1146,7 +1155,7 @@ function sig(kind, payload, btn){
     S.busy = false;
     if (el){ el.className = (el.className||'').replace(' sent','') + ' sent';
              el.innerHTML = ICON.check + ' Sent'; }
-    toast(ICON.check+' The front desk has it.');
+    toast(' The front desk has it.', null, ICON.check);
     refresh();
     if (S.key && S.visit && !S.visit.nameOnly)
       api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })['catch'](function(){});
@@ -1203,7 +1212,7 @@ function askHelp(){
   keepAwake(true);
   api('help',{token:S.token}).then(function(r){
     if (r.existing){ toast('You already have a request open.'); return; }
-    toast(ICON.check+' Sent — the front desk can see it.'); refresh();
+    toast(' Sent — the front desk can see it.', null, ICON.check); refresh();
   })['catch'](function(e){ keepAwake(false); toast(e.message,'err'); });
 }
 function helpWhy(r){ api('helpReason',{token:S.token,reason:r}).then(refresh)['catch'](function(e){ toast(e.message,'err'); }); }
