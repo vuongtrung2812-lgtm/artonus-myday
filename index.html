@@ -645,7 +645,7 @@ function cardHtml(){
   /* WHAT SHE ASKED FOR, first. The alert says this is "on her card" and until now it was
      not — a technician who dismissed the pop-up mid-service had no second way to read it.
      Above the flags on purpose: the flags say how to treat her, this says what to make. */
-  if (c.brief && c.brief.text){
+  if (c.brief && (c.brief.text || c.brief.photos)){
     /* THE PICTURE SHE IS BEING ASKED TO COPY, instead of a count of pictures she cannot see.
        This line used to say "· 2 photos" while the desk decoded the image and threw it away,
        so she went looking for something that had never been stored anywhere. The bytes now go
@@ -653,7 +653,8 @@ function cardHtml(){
        Before/After photos do. */
     var dshot = (S.thumbs||{}).Design, dhas = !!(((S.card||{}).photos)||{}).Design;
     h += '<div class="brief">'+ICON.star+'<div><b>The design she wants</b><br>'
-      + esc(c.brief.text)
+      + (c.brief.text ? esc(c.brief.text)
+                      : '<span class="quiet">No words — she showed a picture.</span>')
       + (dshot
           ? '<button class="briefshot" data-open="Design" style="background-image:url('+dshot+')">'
             + '<span class="cap">Tap to see it big</span></button>'
