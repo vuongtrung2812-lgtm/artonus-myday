@@ -222,6 +222,8 @@
     font-size:14px;line-height:1.5}
   .brief svg{flex:none;stroke:var(--gold);margin-top:2px;width:16px;height:16px}
   .tag.want{background:var(--gold-soft);border-color:var(--gold);color:var(--espresso)}
+    /* Red on purpose. This is the one tag that means stop and read before you start. */
+    .tag.must{background:var(--err-soft);border-color:var(--err-line);color:var(--err);font-weight:700}
   .tag.want svg{width:11px;height:11px;stroke:var(--gold);vertical-align:-1px;margin-right:3px}
   /* Moves and cancellations — the day rearranging itself, said out loud. */
   .changes{margin-bottom:10px}
@@ -463,6 +465,9 @@ function viewToday(){
         + (v.moreTime?' <span class="tag book">+'+v.moreTime+' min</span>':'')
         /* She should know a design is waiting BEFORE she opens the card, so she can read it
            while the client is still walking over rather than after she has sat down. */
+        /* Red, and before the design tag, because an allergy outranks a design brief.
+           She can now tell an allergy client from any other client without opening the card. */
+        + (v.mustKnows?' <span class="tag must">'+v.mustKnows+' must-know'+(v.mustKnows>1?'s':'')+'</span>':'')
         + (v.hasBrief?' <span class="tag want">'+ICON.star+'design</span>':'')
         + '</div></div>';
     });
