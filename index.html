@@ -668,6 +668,17 @@ function chairCard(v){
   return h + '</div>';
 }
 
+/* How far back the average reaches, said the way a person says it. The number comes from the
+   server, which is the thing that applies the window — the page does not get to have its own
+   opinion about how far back "recently" goes. */
+function windowWords(days){
+  var d = Number(days) || 365;
+  if (d <= 45)  return 'in the last month';
+  if (d <= 200) return 'in the last ' + Math.round(d / 30) + ' months';
+  var y = Math.round(d / 365);
+  return y <= 1 ? 'in the last year' : 'in the last ' + y + ' years';
+}
+
 /* WHAT WE KNOW ABOUT HER. She reads all of it — a technician who cannot see the allergy is
    the reason this book exists. */
 function cardHtml(){
@@ -704,8 +715,12 @@ function cardHtml(){
   if (c.tally)
     h += '<div class="card" style="padding:12px 15px"><div class="stars">'
       + '★★★★★'.slice(0, c.tally.avg >= 4.5 ? 5 : Math.round(c.tally.avg))
+      /* The window comes from the SERVER, which is the thing that applies it. This line used
+         to read "past year" as a fixed string while the server averaged every rating she had
+         ever been given — words promising something the number did not do. */
       + '</div><b style="font-size:19px">'+c.tally.avg+'</b> '
-      + '<span class="quiet">· '+c.tally.n+' visits, past year</span></div>';
+      + '<span class="quiet">· '+c.tally.n+' rated visit'+(c.tally.n===1?'':'s')
+      + ', '+windowWords(c.tally.days)+'</span></div>';
 
   (c.flags||[]).forEach(function(f){
     /* SHE CONFIRMS SHE READ IT. Until now a must-know was something to look at and nothing
@@ -1591,7 +1606,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '56d28d44a3d9';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '04a0bf085e9d';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
