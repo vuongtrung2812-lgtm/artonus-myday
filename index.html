@@ -141,6 +141,11 @@
   .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0}
   .c{display:inline-block;background:var(--gold-soft);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;color:var(--espresso)}
+  /* A chip she TAPS, not one she reads. Bigger than a label because it is a target for a
+     thumb on a phone, held by someone whose other hand is busy. */
+  .c.pick{border:1px solid var(--gold);background:none;font:inherit;font-size:13px;
+    font-weight:800;padding:9px 14px;min-height:40px;cursor:pointer;color:var(--espresso)}
+  .c.pick.on{background:var(--espresso);border-color:var(--espresso);color:#FBF8F5}
   .stars{color:var(--gold);letter-spacing:2px}
   /* THE ALERT — centred, everything behind it dimmed, and it stays until acknowledged. */
   .veil{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:18px;
@@ -1316,7 +1321,23 @@ function sig(kind, payload, btn){
 /* ─────────────────────────── help ─────────────────────────── */
 function mmss(ms){ var s=Math.max(0,Math.round(ms/1000));
   return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
-function stampMs(s){ var t = Date.parse(String(s||'').replace(' ','T')); return isFinite(t)?t:Date.now(); }
+/**
+ * THE CLOCK ON A HELP REQUEST.
+ *
+ * MEASURED, 2026-08-15: it read 0:00 and stayed at 0:00 on both screens while a technician
+ * stood waiting.
+ *
+ * The old stampMs took the ledger's `when` and did Date.parse(s.replace(' ','T')). On a
+ * fresh read that value is a Date, and String(aDate) is "Sat Aug 15 2026 11:26:00 GMT-0400"
+ * — replacing the first space makes "SatTAug 15 ...", Date.parse returns NaN, and the
+ * fallback was Date.now(). So the age was always now minus now: zero, for ever.
+ *
+ * A FALLBACK THAT LOOKS LIKE SUCCESS IS THE WORST KIND. Falling back to "now" made a broken
+ * clock read as a request that had just been made, which is exactly the number nobody
+ * questions. The server now sends milliseconds; 0 means unknown and the clock stays blank
+ * rather than lying about it.
+ */
+function helpMs(ms){ var t = Number(ms) || 0; return t || Date.now(); }
 
 function dockHtml(){
   if (!can('tech.help')) return '';
@@ -1325,15 +1346,19 @@ function dockHtml(){
     + ICON.hand+'Ask the front desk for help</button></div>';
   if (h.ack)
     return '<div class="dock"><div class="hstate coming"><div class="r">'+ICON.check
-      + '<b>'+esc(h.ack.by)+' is coming</b><span class="t2">'+mmss(Date.now()-stampMs(h.ack.at))+'</span></div>'
+      + '<b>'+esc(h.ack.by)+' is coming</b><span class="t2">'+mmss(Date.now()-helpMs(h.ack.atMs))+'</span></div>'
       + '<button onclick="clearHelp()">All good — close it</button></div></div>';
-  var age = Date.now()-stampMs(h.at);
+  var age = Date.now()-helpMs(h.atMs);
   return '<div class="dock"><div class="hstate wait"><div class="r">'+ICON.hand
     + '<b>Waiting for the front desk</b><span class="t2">'+mmss(age)+'</span></div>'
-    + (h.reason ? '<div style="margin-top:5px;opacity:.93">'+esc(h.reason)+'</div>'
-       : '<div class="cr">'+['Extra hands','Supplies','A question','The client needs something']
-           .map(function(r){ return '<button onclick="helpWhy(\''+esc(r)+'\')">'+esc(r)+'</button>'; }).join('')
-         +'</div>')
+    /* She chose the reason before this existed, so it is here from the first second. The row
+       of chips that used to live down here — a request already sent, still asking what for —
+       is gone. "Change what you need" is for the case where the answer turns out to be
+       something else. */
+    + (h.reason
+        ? '<div style="margin-top:5px;opacity:.93">'+esc(h.reason)+'</div>'
+          + '<button onclick="helpWhy()">Change what you need</button>'
+        : '<button onclick="helpWhy()">Say what you need</button>')
     + '<button onclick="clearHelp()">'+(age<10000?'Never mind':'No longer needed')+'</button></div></div>';
 }
 /* HER SCREEN STAYS AWAKE WHILE SHE IS WAITING.
@@ -1355,14 +1380,88 @@ document.addEventListener('visibilitychange', function(){
   if (!document.hidden && S.help && !S.help.cleared) keepAwake(true);
 });
 
+/* ══════════════════ ASKING FOR HELP ══════════════════
+ *
+ * SHE SAYS WHAT SHE NEEDS BEFORE THE DESK IS TOLD.
+ *
+ * The button used to raise the hand straight away and ask why afterwards. Two round trips
+ * over salon wifi with a technician standing there, and the desk got "Chelsea needs help"
+ * followed a couple of seconds later by what for — so the first thing anybody at the desk
+ * did was wait. Trung, watching it happen: the delay is more apparent.
+ *
+ * The choosing now happens here, on the phone, where it costs nothing, and ONE call carries
+ * the whole message.
+ *
+ * AND SHE CAN USE HER OWN WORDS. Four chips cannot cover a salon floor. "Her gel is lifting
+ * on two nails and I am out of my base" is the message; "A question" is not. A chip on its
+ * own still sends — the fastest path stays one tap — and so does text on its own.
+ *
+ * NOTHING IS REQUIRED. A hand up with no words is still a hand up. Somebody whose hands are
+ * full must never be blocked from asking by a form.
+ */
+var HELP_CHIPS = ['Extra hands','Supplies','A question','The client needs something'];
+var HELP_PICK = '';
+
 function askHelp(){
-  keepAwake(true);
-  api('help',{token:S.token}).then(function(r){
-    if (r.existing){ toast('You already have a request open.'); return; }
-    toast(' Sent — the front desk can see it.', null, ICON.check); refresh();
-  })['catch'](function(e){ keepAwake(false); toast(e.message,'err'); });
+  HELP_PICK = '';
+  $('veil').className = 'veil on';
+  $('veil').innerHTML = '<div class="alert"><h3>What do you need?</h3>'
+    + '<p class="lede">Pick one, or write it. The front desk sees this the moment you send it.</p>'
+    + '<div class="chips" id="helpchips">'
+    + HELP_CHIPS.map(function(r){
+        return '<button class="c pick" data-help="'+esc(r)+'">'+esc(r)+'</button>'; }).join('')
+    + '</div>'
+    + '<textarea class="in" id="helptext" rows="2" placeholder="Anything else they should know"'
+    + ' maxlength="200" style="margin-top:10px"></textarea>'
+    + '<button class="btn" id="helpgo" style="margin-top:12px">'+ICON.hand+'Ask for help</button>'
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+
+  Array.prototype.forEach.call($('veil').querySelectorAll('[data-help]'), function(b){
+    b.onclick = function(){
+      /* Tapping the chosen chip again clears it — she may have meant to type instead, and a
+         choice that cannot be undone is a choice people avoid making. */
+      var v = b.getAttribute('data-help');
+      HELP_PICK = (HELP_PICK === v) ? '' : v;
+      Array.prototype.forEach.call($('veil').querySelectorAll('[data-help]'), function(o){
+        o.className = 'c pick' + (o.getAttribute('data-help') === HELP_PICK ? ' on' : '');
+      });
+    };
+  });
+  $('helpgo').onclick = function(){ sendHelp(this); };
 }
-function helpWhy(r){ api('helpReason',{token:S.token,reason:r}).then(refresh)['catch'](function(e){ toast(e.message,'err'); }); }
+
+function sendHelp(btn){
+  var text = ($('helptext') && $('helptext').value) || '';
+  btn.disabled = true; btn.textContent = 'Sending…';
+  keepAwake(true);
+  api('help', { token:S.token, reason:HELP_PICK, text:text }).then(function(r){
+    shutVeil();
+    if (r.existing){ toast('You already have a request open.'); refresh(); return; }
+    toast(' Sent — the front desk can see it.', null, ICON.check);
+    refresh();
+  })['catch'](function(e){
+    btn.disabled = false; btn.innerHTML = ICON.hand + 'Ask for help';
+    keepAwake(false); toast(e.message,'err');
+  });
+}
+
+/* Adding or changing the reason on a request that is already open — the same sheet, so there
+   is one place that knows how to ask this question. */
+function helpWhy(){
+  askHelp();
+  var go = $('helpgo');
+  if (go){ go.innerHTML = ICON.check + 'Tell them'; go.onclick = function(){ changeHelpWhy(this); }; }
+}
+function changeHelpWhy(btn){
+  var text = ($('helptext') && $('helptext').value) || '';
+  if (!HELP_PICK && !String(text).trim()){ toast('Pick one or write it first.','err'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  api('helpReason', { token:S.token, reason:HELP_PICK, text:text }).then(function(){
+    shutVeil(); refresh();
+  })['catch'](function(e){
+    btn.disabled = false; btn.innerHTML = ICON.check + 'Tell them'; toast(e.message,'err');
+  });
+}
 function clearHelp(){
   api('helpClear',{token:S.token,how:'tech'}).then(function(){
     keepAwake(false); toast('Closed.'); refresh();
@@ -1606,7 +1705,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '04a0bf085e9d';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'f638f65b9dc4';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
