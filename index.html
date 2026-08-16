@@ -244,6 +244,7 @@
   .sentbar .r .what{font-weight:700}
   .sentbar .r .st{flex:none;font-size:11.5px;font-weight:800;letter-spacing:.3px;
     text-transform:uppercase;color:var(--ok)}
+  .sentbar .r .st.ok{color:var(--ok)}
   .sentbar .r .st.wait{color:var(--gold)}
   .sentbar .r .st.late{color:var(--err)}
   .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
@@ -445,6 +446,7 @@ function loadDay(){
        polls without trusting this phone's own idea of what time it is. */
     S.pollAt = Date.now();
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
+    applyPending();
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
     /* quiet: whatever happened before she opened the app is history. It is all in the bell,
@@ -793,10 +795,20 @@ function missingBits(){
  * "She is in the chair" and "almost finished" never need doing, so being read is the whole
  * receipt for those and they never go red.
  */
+/* HOW LONG SHE HAS BEEN WAITING — but only once that is worth saying.
+ *
+ * The first version said "Waiting" the instant she pressed. Trung, immediately: "it still
+ * makes it look like the feature didn't work." He is right. She pressed the button, the
+ * button worked, and the screen answered by telling her she was waiting for somebody. Being
+ * technically accurate about the desk not having replied yet is not worth making a working
+ * feature look broken.
+ *
+ * So: pressing always reads as DONE. The nagging starts only after the desk has genuinely had
+ * time and not used it. */
+var NAG_AFTER = 30, LOUD_AFTER = 300;
 function waitedText(sec){
-  if (sec < 60) return 'Waiting';
   var m = Math.floor(sec / 60);
-  return 'Waiting ' + m + ' min';
+  return m < 1 ? 'Waiting' : 'Waiting ' + m + ' min';
 }
 function sentBar(v){
   var sent = v.sent || [];
@@ -805,25 +817,27 @@ function sentBar(v){
      whose clock is a few minutes out would otherwise tell her she has been waiting since
      before she asked. We add only the time since the answer arrived. */
   var drift = Math.max(0, Math.round((Date.now() - (S.pollAt || Date.now())) / 1000));
-  var anyLate = false;
+  var anyLate = false, anyNag = false;
   var rows = sent.map(function(x){
-    var st, cls = '';
-    if (x.ack && x.ack.state === 'done'){ st = 'Done · ' + x.ack.by; }
+    var st, cls = ' ok';
+    if (x.ack && x.ack.state === 'done'){ st = 'Done · ' + esc(x.ack.by); }
     else if (x.ack){ st = esc(x.ack.by) + ' has it'; }
-    else if (!x.needsDone){ st = 'Sent'; cls = ' wait'; }
     else {
-      var sec = (x.waitedSec || 0) + drift;
-      cls = sec >= 300 ? ' late' : ' wait';
-      if (sec >= 300) anyLate = true;
-      st = waitedText(sec);
+      /* A pending line counts from her press; a real one from the server's own stamp. */
+      var sec = (x.waitedSec || 0) + (x.id === 'pending' ? 0 : drift);
+      if (!x.needsDone || sec < NAG_AFTER){ st = 'Sent'; }
+      else if (sec < LOUD_AFTER){ st = waitedText(sec); cls = ' wait'; anyNag = true; }
+      else { st = waitedText(sec); cls = ' late'; anyLate = true; anyNag = true; }
     }
     return '<div class="r"><span class="what">' + esc(x.label) + '</span>'
       + '<span class="st' + cls + '">' + st + '</span></div>';
   }).join('');
-  var open = sent.some(function(x){ return x.needsDone && !(x.ack && x.ack.state === 'done'); });
-  return '<div class="sentbar' + (open ? ' waiting' : '') + '">'
-    + (open ? ICON.clock : ICON.check)
-    + '<div class="rows"><b>' + (open ? 'Waiting on the front desk' : 'The front desk has it')
+  /* The bar only turns amber when something is genuinely overdue. Everything else — including
+     the half second between her press and the server hearing about it — is a green tick. */
+  return '<div class="sentbar' + (anyNag ? ' waiting' : '') + '">'
+    + (anyNag ? ICON.clock : ICON.check)
+    + '<div class="rows"><b>' + (anyNag ? 'Still waiting on the front desk'
+                                        : 'The front desk has it')
     + '</b>' + rows
     + (anyLate ? '<div class="r" style="border:0;padding-top:6px"><span class="quiet">'
                  + 'Nobody has answered. Go and say it out loud.</span></div>' : '')
@@ -1329,29 +1343,68 @@ function previewLabel(kind, p){
   }
   return '';
 }
-/** Draw what she just asked for. Returns the function that puts it back. */
-function preview(kind, payload){
+/* ══════════════════ WHAT SHE ASKED FOR, UNTIL THE SERVER SAYS IT TOO ══════════════════
+ *
+ * MEASURED AGAINST A REAL USER, 2026-08-16. Trung: "I hate the preview, it still makes it
+ * look like the feature didn't work."
+ *
+ * He was right and the cause was mine. The first preview drew straight onto S.visit, and the
+ * very next poll — a second and a half later — replaced S.visit wholesale with the server's
+ * answer. The day ledger is cached for three seconds, so that answer often did NOT yet contain
+ * what she had just sent. So the screen went: sent, gone, back a few seconds later. A thing
+ * that appears and then vanishes reads as failure, and it is worse than no preview at all.
+ *
+ * PENDING LIVES OUTSIDE THE VISIT. It is re-applied on top of every poll answer and dropped
+ * only when the server's own list contains the same thing. A refresh can never take her work
+ * off the screen.
+ */
+var PEND = [];
+
+function pendLabel(p){ return previewLabel(p.kind, p.payload); }
+
+/** Is the server now telling us about this ask itself? */
+function pendSettled(v, p){
+  return (v.sent || []).some(function(x){
+    return x.kind === p.kind && x.label === pendLabel(p) && x.id !== 'pending';
+  });
+}
+
+/** Lay everything still in flight on top of whatever the poll just handed us. */
+function applyPending(){
   var v = S.visit;
-  if (!v) return function(){};
-  var before = { moreTime: v.moreTime, tier: v.tier, state: v.state,
-                 addons: (v.addons || []).slice(), campaigns: (v.campaigns || []).slice(),
-                 sent: (v.sent || []).slice() };
-  var p = payload || {};
-  if (kind === 'MORE_TIME')   v.moreTime = Number(p.mins) || 0;       // SET, never stack
-  if (kind === 'TIER_CHANGE') v.tier = p.to || v.tier;
-  if (kind === 'ADDON')       v.addons = (v.addons || []).concat(
-                                [{ name: p.name, label: p.label || p.name, price: 0 }]);
-  if (kind === 'CAMPAIGN_INTEREST' && p.name && (v.campaigns || []).indexOf(p.name) < 0)
-    v.campaigns = (v.campaigns || []).concat([p.name]);
-  if (PREVIEW_STATE[kind]) v.state = PREVIEW_STATE[kind];
-  /* A line in the receipt bar the moment she presses, so "waiting on the front desk" starts
-     counting from when she asked rather than from when the server got round to saying so. */
-  v.sent = (v.sent || []).concat([{ id: 'pending', kind: kind, label: previewLabel(kind, p),
-                                    needsDone: true, waitedSec: 0, ack: null }]);
-  render();
+  if (!v) return;
+  var now = Date.now();
+  PEND = PEND.filter(function(p){
+    if (p.key !== v.key) return true;                 // another client's ask; leave it alone
+    if (pendSettled(v, p)) return false;              // the server is saying it now
+    /* A minute is far longer than any round trip. If it has not shown up by then the server
+       is the truth and holding a ghost on her screen would be a lie. */
+    return (now - p.at) < 60000;
+  });
+  PEND.forEach(function(p){
+    if (p.key !== v.key) return;
+    var d = p.payload || {};
+    if (p.kind === 'MORE_TIME')   v.moreTime = Number(d.mins) || 0;
+    if (p.kind === 'TIER_CHANGE') v.tier = d.to || v.tier;
+    if (p.kind === 'ADDON')       v.addons = (v.addons || []).concat(
+                                    [{ name: d.name, label: d.label || d.name, price: 0 }]);
+    if (p.kind === 'CAMPAIGN_INTEREST' && d.name && (v.campaigns || []).indexOf(d.name) < 0)
+      v.campaigns = (v.campaigns || []).concat([d.name]);
+    if (PREVIEW_STATE[p.kind]) v.state = PREVIEW_STATE[p.kind];
+    v.sent = (v.sent || []).concat([{ id:'pending', kind:p.kind, label:pendLabel(p),
+                                      needsDone:true, waitedSec:Math.round((now-p.at)/1000),
+                                      ack:null, mine:true }]);
+  });
+}
+
+/** Record the ask, draw it, and hand back the way to take it off again. */
+function preview(kind, payload){
+  if (!S.visit) return function(){};
+  var p = { kind:kind, payload:payload || {}, key:S.visit.key, at:Date.now() };
+  PEND.push(p);
+  applyPending(); render();
   return function undo(){
-    v.moreTime = before.moreTime; v.tier = before.tier; v.state = before.state;
-    v.addons = before.addons; v.campaigns = before.campaigns; v.sent = before.sent;
+    PEND = PEND.filter(function(x){ return x !== p; });
     render();
   };
 }
@@ -1829,7 +1882,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '4ca24d194d66';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '4e8f283d12e5';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -1968,6 +2021,7 @@ function refresh(quiet){
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
+    applyPending();          // her work goes back on top of the server's answer
     if (absorb(r)) { refresh(quiet); return; }     // the day rolled: start it from zero
     render(); paintAlert(); refreshBell();
   })['catch'](function(e){
