@@ -1707,20 +1707,67 @@ function mine(e){
   return true;
 }
 
+/* ══════════════════ THREE CHANGES ARE ONE CHANGE ══════════════════
+ *
+ * MEASURED, 2026-08-16. The desk upgraded a service and added two add-ons, and this raised
+ * "FROM THE FRONT DESK · 3 UPDATES" with three lines and three prices — for one decision made
+ * in one breath at the counter.
+ *
+ * The desk now stamps everything it sends together with the same `batch`, so it can be read
+ * back as the one thing it was. The ROWS stay separate on the ledger: the price is folded
+ * from them one at a time, and merging them there would mean re-implementing that arithmetic.
+ * This is a reading, not a rewrite.
+ */
+function groupBatches(list){
+  var out = [], byBatch = {};
+  list.forEach(function(e){
+    var b = (e.payload || {}).batch;
+    if (!b){ out.push(e); return; }
+    if (byBatch[b]){ byBatch[b].parts.push(e); byBatch[b].ids.push(e.id); return; }
+    byBatch[b] = { id: e.id, ids: [e.id], batch: b, who: e.who, rowKey: e.rowKey,
+                   type: 'BATCH', parts: [e] };
+    out.push(byBatch[b]);
+  });
+  return out;
+}
+
+/* One sentence for the whole batch: what she is doing now, everything added, and the money
+   from where it started to where it ended. */
+function batchText(g){
+  var nm = '<b>'+esc(visitName(g.rowKey))+'</b>';
+  var svc = null, adds = [], from = null, to = null;
+  g.parts.forEach(function(e){
+    var p = e.payload || {};
+    if (e.type === 'SVC_CHANGE'){ svc = p.to; if (from === null) from = p.fromPrice; to = p.price; }
+    if (e.type === 'ADDON'){ adds.push(p.label || p.name);
+      if (from === null) from = p.fromPrice; to = p.toPrice; }
+  });
+  var says = [];
+  if (svc) says.push('now <b>'+esc(svc)+'</b>');
+  if (adds.length) says.push('plus <b>'+adds.map(esc).join('</b>, <b>')+'</b>');
+  return nm+' '+(says.join(', ') || 'has changes')
+    + ((from != null && to != null && from !== to)
+        ? ' <span class="ba"><span class="was">'+esc(money(from))+'</span>'
+          + '<span class="arrow">\u2192</span><b>'+esc(money(to))+'</b></span>'
+        : '');
+}
+
 function paintAlert(){
   /* #alertveil, never #veil. This used to reach for the same element the composer uses, and
      the very next poll — four seconds later — set its className back to closed. The
      must-know box vanished mid-sentence, which read as the app refusing to open it. */
-  var el = $('alertveil'), pend = unseen();
+  var el = $('alertveil'), pend = groupBatches(unseen());
   if (!pend.length){ el.className='veil'; S.shownIds=[]; return; }
   var wasOpen = el.classList.contains('on');
   var fresh = wasOpen ? pend.filter(function(e){ return S.shownIds.indexOf(e.id)<0; }).map(function(e){return e.id;}) : [];
-  S.shownIds = pend.map(function(e){ return e.id; });
+  /* A batch answers for every row inside it, so one Got it clears the lot. */
+  S.shownIds = pend.reduce(function(a, e){ return a.concat(e.ids || [e.id]); }, []);
   el.className = 'veil on';
   el.innerHTML = '<div class="alert"><div class="hd"><img src="'+LOGO+'" alt="" class="hdmark">From the front desk · '
     + pend.length+(pend.length>1?' updates':' update')+'</div>'
     + pend.slice().reverse().map(function(e){
-        return '<div class="item'+(fresh.indexOf(e.id)>=0?' fresh':'')+'">'+evText(e)
+        return '<div class="item'+(fresh.indexOf(e.id)>=0?' fresh':'')+'">'
+          + (e.type === 'BATCH' ? batchText(e) : evText(e))
           + '<div class="who">'+esc(e.who||'')+'</div></div>'; }).join('')
     + (fresh.length?'<div class="newline">'+fresh.length+' arrived while you were reading — included above.</div>':'')
     + '<button class="btn" style="margin-top:12px" onclick="ackShown()">Got it'
@@ -1974,7 +2021,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '4b172d6c94cb';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'd887860e3d5e';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
