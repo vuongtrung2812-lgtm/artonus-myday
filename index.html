@@ -446,6 +446,7 @@ function loadDay(){
        polls without trusting this phone's own idea of what time it is. */
     S.pollAt = Date.now();
     S.tech=r.tech; S.chair=r.chair; S.visits=r.visits; S.help=r.help; S.caps=r.caps||[];
+    applyHelpPending();      // the hand stays where she put it
     applyPending();
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
@@ -1546,23 +1547,57 @@ function askHelp(){
   $('helpgo').onclick = function(){ sendHelp(this); };
 }
 
+/* ══════════════════ THE HAND, HELD WHERE SHE PUT IT ══════════════════
+ *
+ * Trung, 2026-08-16: "if I click the button I expect it to work instantaneously... if I
+ * closed out the request there should not be a delayed."
+ *
+ * Both were real and both were mine.
+ *
+ * RAISING IT FLICKERED, for the same reason the signal preview did. sendHelp set S.help, and
+ * the next poll a second and a half later set `S.help = r.help` — and the day ledger is
+ * cached three seconds, so r.help was often still null. The red bar appeared, vanished, and
+ * came back. Worse than no preview.
+ *
+ * CLOSING IT WAS TWO ROUND TRIPS. clearHelp waited for the server, then called refresh() and
+ * waited again, and only then did the bar come down. About two seconds of a red bar sitting
+ * there after she had already said she did not need it.
+ *
+ * So the hand is held where she put it — up or down — and the server catches up underneath.
+ * One flag, re-applied on top of every poll, dropped the moment the server agrees.
+ */
+var HELP_PEND = null;                  // { want:'open'|'clear', at:ms, help:<bar to hold up> }
+
+function applyHelpPending(){
+  if (!HELP_PEND) return;
+  /* A minute is far longer than any round trip. Past that the server is the truth, whatever
+     we think we asked for — holding a hand up that is not up would be a lie. */
+  if (Date.now() - HELP_PEND.at > 60000){ HELP_PEND = null; return; }
+  if (HELP_PEND.want === 'open'){
+    if (S.help){ HELP_PEND = null; return; }        // the server is showing it now
+    S.help = HELP_PEND.help;
+  } else {
+    if (!S.help){ HELP_PEND = null; return; }       // the server has let it go
+    S.help = null;
+  }
+}
+
 function sendHelp(btn){
   var text = ($('helptext') && $('helptext').value) || '';
   var reason = HELP_PICK && text ? HELP_PICK + ' — ' + text : (HELP_PICK || text);
   keepAwake(true);
-  /* THE RED BAR APPEARS ON THE PRESS, and its clock starts from the press. She raised her
-     hand at that second, not when Google got round to writing the row — and a hand that
-     seems to take a second to go up is a hand people stop raising. The bar is redrawn from
-     the server on the next poll; if the request were refused it comes straight back down
-     with the reason, which is the same rule every preview in this file follows. */
-  var was = S.help;
-  S.help = { helpId: 'pending', tech: S.tech, at: '', atMs: Date.now(), ack: null, reason: reason };
+  /* Her clock starts at the press, not when Google got round to writing the row. A hand that
+     seems to take a second to go up is a hand people stop raising. */
+  HELP_PEND = { want:'open', at:Date.now(),
+                help:{ helpId:'pending', tech:S.tech, at:'', atMs:Date.now(),
+                       ack:null, reason:reason } };
+  S.help = HELP_PEND.help;
   shutVeil(); render();
   api('help', { token:S.token, reason:HELP_PICK, text:text }).then(function(r){
     if (r.existing) toast('You already have a request open.');
-    pollHot();                       // the server's own version lands a moment later
+    pollHot();
   })['catch'](function(e){
-    S.help = was; render();
+    HELP_PEND = null; S.help = null; render();
     keepAwake(false); toast(e.message,'err');
   });
 }
@@ -1577,17 +1612,31 @@ function helpWhy(){
 function changeHelpWhy(btn){
   var text = ($('helptext') && $('helptext').value) || '';
   if (!HELP_PICK && !String(text).trim()){ toast('Pick one or write it first.','err'); return; }
-  btn.disabled = true; btn.textContent = 'Sending…';
+  var reason = HELP_PICK && text ? HELP_PICK + ' — ' + text : (HELP_PICK || text);
+  var was = S.help && S.help.reason;
+  if (S.help) S.help.reason = reason;              // she sees her own words at once
+  shutVeil(); render();
   api('helpReason', { token:S.token, reason:HELP_PICK, text:text }).then(function(){
-    shutVeil(); refresh();
+    pollHot();
   })['catch'](function(e){
-    btn.disabled = false; btn.innerHTML = ICON.check + 'Tell them'; toast(e.message,'err');
+    if (S.help) S.help.reason = was; render();
+    toast(e.message,'err');
   });
 }
+
 function clearHelp(){
+  /* DOWN ON THE PRESS. This used to wait for the server and then for a whole refresh on top,
+     so the red bar sat there for about two seconds after she had said she was fine. */
+  var was = S.help;
+  HELP_PEND = { want:'clear', at:Date.now() };
+  S.help = null;
+  keepAwake(false); render();
   api('helpClear',{token:S.token,how:'tech'}).then(function(){
-    keepAwake(false); toast('Closed.'); refresh();
-  })['catch'](function(e){ toast(e.message,'err'); });
+    pollHot();
+  })['catch'](function(e){
+    HELP_PEND = null; S.help = was; render();
+    keepAwake(true); toast(e.message,'err');
+  });
 }
 
 /* ─────────────────────────── alerts ─────────────────────────── */
@@ -1882,7 +1931,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '4e8f283d12e5';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '712565b68062';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -2018,6 +2067,7 @@ function refresh(quiet){
     pollTrouble(false);
     S.pollAt = Date.now();
     S.visits = r.visits; S.help = r.help; S.caps = r.caps||S.caps;
+    applyHelpPending();      // the hand stays where she put it
     if (r.vocab && r.vocab.length) S.vocab = r.vocab;
     S.changes = r.changes || [];
     if (S.key) S.visit = S.visits.filter(function(v){ return v.key===S.key; })[0] || S.visit;
