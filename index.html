@@ -1718,17 +1718,33 @@ function mine(e){
  * from them one at a time, and merging them there would mean re-implementing that arithmetic.
  * This is a reading, not a rewrite.
  */
+var BATCH_SEEN = {};                 // batch id -> when we first saw any part of it
+var BATCH_WAIT = 9000;               // how long to hold a half-arrived change before showing it
+
 function groupBatches(list){
-  var out = [], byBatch = {};
+  var out = [], byBatch = {}, now = Date.now();
   list.forEach(function(e){
     var b = (e.payload || {}).batch;
     if (!b){ out.push(e); return; }
     if (byBatch[b]){ byBatch[b].parts.push(e); byBatch[b].ids.push(e.id); return; }
+    if (!BATCH_SEEN[b]) BATCH_SEEN[b] = now;
     byBatch[b] = { id: e.id, ids: [e.id], batch: b, who: e.who, rowKey: e.rowKey,
-                   type: 'BATCH', parts: [e] };
+                   type: 'BATCH', parts: [e], want: Number((e.payload || {}).batchN) || 0 };
     out.push(byBatch[b]);
   });
-  return out;
+  /* HALF A CHANGE IS WORSE THAN NO CHANGE YET.
+   *
+   * Each row of a batch is its own append, so a poll landing mid-write can see one of three.
+   * Showing that would let her read "now Tier 5" and press Got it — and the two add-ons
+   * arrive afterwards as a second card, or with an unlucky cursor are never raised at all.
+   *
+   * So an incomplete batch is held back rather than shown. Not for ever: if the rest has not
+   * arrived in nine seconds something has gone wrong upstream, and what we do have is worth
+   * more to her than silence. */
+  return out.filter(function(g){
+    if (g.type !== 'BATCH' || !g.want || g.parts.length >= g.want) return true;
+    return (now - BATCH_SEEN[g.batch]) > BATCH_WAIT;
+  });
 }
 
 /* One sentence for the whole batch: what she is doing now, everything added, and the money
@@ -2021,7 +2037,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'd887860e3d5e';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'ac03ae6326bb';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
