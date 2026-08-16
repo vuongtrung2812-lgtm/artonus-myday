@@ -1693,6 +1693,15 @@ function visitName(rowKey){
  * the one that matters then gets dismissed with the rest. Seen shows up quietly on her card,
  * against the item. Only DONE interrupts her, because only done ends the question. */
 function mine(e){
+  /* SHE IS TOLD WHEN THE DESK CLOSES IT FOR HER. The desk can now mark a request "taken care
+     of" — because the person least likely to remember to close it is the one whose hands are
+     back in a client's. Her red bar would otherwise just vanish, which is the same "did that
+     work?" question from the other direction. A toast, not an alert: nothing is needed from
+     her, and the thing she asked for has already happened. */
+  if (e.type === 'HELP_CLEAR' && (e.payload || {}).how === 'desk' && e.who !== S.tech){
+    toast(esc(e.who) + ' marked it taken care of.', null, ICON.check);
+    return false;
+  }
   if (e.who === S.tech || e.type.indexOf('HELP') === 0) return false;
   if (e.type === 'SIGNAL_ACK') return ((e.payload||{}).state === 'done');
   return true;
@@ -1934,7 +1943,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '3b47f8fa8153';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'e795692f20f6';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
