@@ -1877,17 +1877,48 @@ function pollMs(){ return ES ? 300000 : POLL_MS; }             // a live channel
  *
  * If the ring does not get through, nothing breaks: she learns on the ordinary poll, which is
  * exactly where she was before any of this existed. */
-var TICKT = null, TICK_MS = 1500, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = true;
+/* WHAT THE DESK SAID, WITHOUT GOING TO LOOK.
+ *
+ * The doorbell used to answer a bare number, so hearing it meant a FRESH read of the day —
+ * opening the spreadsheet, a second and a half — before her bar could change. The desk
+ * already knew what it had done; sending her to read it back out of a spreadsheet was the
+ * long way round.
+ *
+ * The ring now carries a line about it and this applies it at once. The authoritative read
+ * still follows and replaces whatever this drew — it is a preview like every other one here,
+ * and it lives on S.help which the poll rebuilds, so it can never become the record.
+ */
+function applyNews(news, since){
+  if (!news || !news.length || !S.help) return;
+  var changed = false;
+  news.forEach(function(x){
+    if (Number(x.n) <= Number(since)) return;                 // already seen
+    /* EXACT MATCH, ALWAYS. Anything else is how a stale close takes down a request she has
+       just raised: she closes one, immediately raises another, and the desk's close for the
+       OLD id is still in flight. While hers is still 'pending' we have no id to compare, so
+       we apply nothing and let the authoritative read a moment later say what is true. */
+    if (!x.helpId || S.help.helpId === 'pending' || x.helpId !== S.help.helpId) return;
+    if (x.type === 'HELP_ACK'){ S.help.ack = { by:x.who, atMs:Date.now() }; changed = true; }
+    if (x.type === 'HELP_CLEAR'){
+      HELP_PEND = null; S.help = null; keepAwake(false); changed = true;
+      toast(esc(x.who) + ' marked it taken care of.', null, ICON.check);
+    }
+  });
+  if (changed) render();
+}
+
+var TICKT = null, TICK_MS = 1200, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = true;
 function tickLoop(){
   clearTimeout(TICKT);
   TICKT = setTimeout(function(){
     tickLoop();
     if (!TICK_ON || document.hidden || !S.token || REFRESHING) return;
-    api('tick', {}).then(function(r){
+    api('tick', { token:S.token }).then(function(r){
       TICKFAIL = 0;
       var n = Number(r && r.n) || 0;
-      if (LAST_TICK < 0){ LAST_TICK = n; return; }      // first answer is the baseline
+      if (LAST_TICK < 0){ LAST_TICK = n; applyNews(r.news, n); return; }   // baseline
       if (n === LAST_TICK) return;
+      applyNews(r.news, LAST_TICK);
       LAST_TICK = n;
       /* FRESH — the ring only happens because a row was just written, and the day is cached
          for a few seconds. Reading the cache here would return a list without it and move the
@@ -1943,7 +1974,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'e795692f20f6';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '4b172d6c94cb';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
