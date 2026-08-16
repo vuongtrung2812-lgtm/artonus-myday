@@ -1880,7 +1880,10 @@ function tickLoop(){
       if (LAST_TICK < 0){ LAST_TICK = n; return; }      // first answer is the baseline
       if (n === LAST_TICK) return;
       LAST_TICK = n;
-      refresh(true);
+      /* FRESH — the ring only happens because a row was just written, and the day is cached
+         for a few seconds. Reading the cache here would return a list without it and move the
+         cursor on as if nothing had arrived. */
+      refresh(true, true);
     })['catch'](function(){
       /* A doorbell nobody answers must not become a hammer. Back off, and let the ordinary
          poll carry the day until it comes back. */
@@ -1931,7 +1934,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '712565b68062';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '3b47f8fa8153';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -2057,12 +2060,12 @@ function pollTrouble(on){
 /* ONE call, not two. This used to ask techToday and then dayFeed, which is two executions
    and two lots of that 0.9s — for one refresh. techPoll answers both. */
 var REFRESHING = false;
-function refresh(quiet){
+function refresh(quiet, fresh){
   /* One at a time. Two overlapping polls both read the cursor before either writes it, so
      both fetch the same events and the second pushes duplicates. */
   if (!S.token || REFRESHING) return;
   REFRESHING = true;
-  api('techPoll', { token:S.token, since:S.cursor }).then(function(r){
+  api('techPoll', { token:S.token, since:S.cursor, fresh: fresh ? 1 : 0 }).then(function(r){
     REFRESHING = false;
     pollTrouble(false);
     S.pollAt = Date.now();
