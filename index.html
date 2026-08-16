@@ -1752,21 +1752,21 @@ function pollMs(){ return ES ? 300000 : POLL_MS; }             // a live channel
  * The slow poll stays underneath as a net: `tick` only sees the day ledger, so a booking moved
  * in Wix or a word retired at the desk still arrives on the ordinary refresh.
  */
-/* NOT SWITCHED ON FOR THE PHONE, and the reason is worth keeping.
+/* SWITCHED ON. The reason it was off, and what changed:
  *
  * My Day's counter moves when a CHAIR writes. What a technician is waiting for is the DESK's
  * answer, and the desk writes through the Clients project — whose web app answers MYSELF and
  * turns away anything that is not the salon's Google login. This page cannot reach it. That
  * is the same wall that killed the original satellite design in August.
  *
- * So the doorbell helps the desk hear the chairs, and does nothing for the chairs hearing the
- * desk. Switching it on here would spend a call every second and a half to learn nothing.
+ * That was true until the bridge was closed the other way. Clients CAN call My Day — that
+ * direction is proven and the photo bridge uses it every day — so Clients now pings a
+ * password-protected `tickBump` door after every desk write. ONE counter carries both
+ * projects, and this loop hears the desk. Built 2026-08-16.
  *
- * THE COMPLETING STEP, when it is wanted: Clients CAN call My Day — that direction is proven,
- * the photo bridge uses it every day. A password-protected `tickBump` door on My Day, pinged
- * by Clients after each desk write, would make ONE counter carry both projects and this loop
- * would work. It is written up in the speed ledger; it is not built. */
-var TICKT = null, TICK_MS = 1500, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = false;
+ * If the ring does not get through, nothing breaks: she learns on the ordinary poll, which is
+ * exactly where she was before any of this existed. */
+var TICKT = null, TICK_MS = 1500, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = true;
 function tickLoop(){
   clearTimeout(TICKT);
   TICKT = setTimeout(function(){
@@ -1829,7 +1829,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2688517f64c9';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '4ca24d194d66';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
