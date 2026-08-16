@@ -1297,23 +1297,86 @@ function wireChair(v){
 
 /* One lock across the whole round trip. Without it a second tap while the first is in the
    air sends the same thing twice, and the desk sees a request nobody made. */
+/* ══════════════════ WHY THE SCREEN MOVES BEFORE THE SERVER ANSWERS ══════════════════
+ *
+ * MEASURED, 2026-08-16. Trung: "after it said that the message is sent there is still a delay
+ * as to when the result actually happens."
+ *
+ * He was watching three round trips, not one. sig() sent the signal (about a second), then
+ * called refresh() — a whole techPoll — and then techClient on top of it. The word "Sent"
+ * appeared after the first and her screen changed after the third.
+ *
+ * Now the screen changes on the PRESS. What she asked for is what she sees, immediately, and
+ * the request goes in the background.
+ *
+ * THIS IS A PREVIEW, NEVER A RECORD. The ledger on the server is the only truth, every poll
+ * overwrites what is drawn here, and a refusal puts the screen back exactly as it was and
+ * says why. That matters with several chairs working at once: if the desk changed the ticket
+ * a second before she pressed, the next poll corrects her screen rather than her preview
+ * standing as fact. The rule is: this file may GUESS, it may never DECIDE.
+ */
+var PREVIEW_STATE = { SEATED:'in service', ALMOST_DONE:'almost done', FINISHED:'finished' };
+function previewLabel(kind, p){
+  switch (kind){
+    case 'MORE_TIME':         return '+' + (Number(p.mins) || 0) + ' minutes';
+    case 'SVC_CHANGE':        return 'Changed to ' + String(p.to || '');
+    case 'ADDON':             return String(p.label || p.name || 'Add-on');
+    case 'TIER_CHANGE':       return 'Design ' + String(p.to || '');
+    case 'CAMPAIGN_INTEREST': return String(p.name || '');
+    case 'SEATED':            return 'She is in the chair';
+    case 'ALMOST_DONE':       return 'Almost finished';
+    case 'FINISHED':          return 'Finished';
+  }
+  return '';
+}
+/** Draw what she just asked for. Returns the function that puts it back. */
+function preview(kind, payload){
+  var v = S.visit;
+  if (!v) return function(){};
+  var before = { moreTime: v.moreTime, tier: v.tier, state: v.state,
+                 addons: (v.addons || []).slice(), campaigns: (v.campaigns || []).slice(),
+                 sent: (v.sent || []).slice() };
+  var p = payload || {};
+  if (kind === 'MORE_TIME')   v.moreTime = Number(p.mins) || 0;       // SET, never stack
+  if (kind === 'TIER_CHANGE') v.tier = p.to || v.tier;
+  if (kind === 'ADDON')       v.addons = (v.addons || []).concat(
+                                [{ name: p.name, label: p.label || p.name, price: 0 }]);
+  if (kind === 'CAMPAIGN_INTEREST' && p.name && (v.campaigns || []).indexOf(p.name) < 0)
+    v.campaigns = (v.campaigns || []).concat([p.name]);
+  if (PREVIEW_STATE[kind]) v.state = PREVIEW_STATE[kind];
+  /* A line in the receipt bar the moment she presses, so "waiting on the front desk" starts
+     counting from when she asked rather than from when the server got round to saying so. */
+  v.sent = (v.sent || []).concat([{ id: 'pending', kind: kind, label: previewLabel(kind, p),
+                                    needsDone: true, waitedSec: 0, ack: null }]);
+  render();
+  return function undo(){
+    v.moreTime = before.moreTime; v.tier = before.tier; v.state = before.state;
+    v.addons = before.addons; v.campaigns = before.campaigns; v.sent = before.sent;
+    render();
+  };
+}
+
 function sig(kind, payload, btn){
   if (S.busy) return;
   S.busy = true;
   var el = (typeof btn === 'string') ? $(btn) : btn;
   var was = el && el.innerHTML;
-  if (el){ el.disabled = true; el.innerHTML = 'Sending…'; }
+  if (el){ el.disabled = true; el.innerHTML = ICON.check + ' Sent'; el.className =
+             (el.className || '').replace(' sent','') + ' sent'; }
+  var undo = preview(kind, payload);
   api('signal', { token:S.token, key:S.key, kind:kind, payload:payload }).then(function(){
     S.busy = false;
-    if (el){ el.className = (el.className||'').replace(' sent','') + ' sent';
-             el.innerHTML = ICON.check + ' Sent'; }
-    toast(' The front desk has it.', null, ICON.check);
-    refresh();
-    if (S.key && S.visit && !S.visit.nameOnly)
-      api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })['catch'](function(){});
+    if (el) el.disabled = false;
+    /* NO refresh() here on purpose. The two calls that used to run at this point are what he
+       was waiting through, and neither told him anything the preview has not already drawn.
+       pollHot leans the ordinary poll in, so the server's own version lands a moment later
+       and quietly replaces the guess. */
+    pollHot();
   })['catch'](function(e){
     S.busy = false;
-    if (el){ el.disabled=false; el.innerHTML = was; }
+    undo();
+    if (el){ el.disabled=false; el.innerHTML = was;
+             el.className = (el.className || '').replace(' sent',''); }
     toast(e.message,'err');
   });
 }
@@ -1432,15 +1495,21 @@ function askHelp(){
 
 function sendHelp(btn){
   var text = ($('helptext') && $('helptext').value) || '';
-  btn.disabled = true; btn.textContent = 'Sending…';
+  var reason = HELP_PICK && text ? HELP_PICK + ' — ' + text : (HELP_PICK || text);
   keepAwake(true);
+  /* THE RED BAR APPEARS ON THE PRESS, and its clock starts from the press. She raised her
+     hand at that second, not when Google got round to writing the row — and a hand that
+     seems to take a second to go up is a hand people stop raising. The bar is redrawn from
+     the server on the next poll; if the request were refused it comes straight back down
+     with the reason, which is the same rule every preview in this file follows. */
+  var was = S.help;
+  S.help = { helpId: 'pending', tech: S.tech, at: '', atMs: Date.now(), ack: null, reason: reason };
+  shutVeil(); render();
   api('help', { token:S.token, reason:HELP_PICK, text:text }).then(function(r){
-    shutVeil();
-    if (r.existing){ toast('You already have a request open.'); refresh(); return; }
-    toast(' Sent — the front desk can see it.', null, ICON.check);
-    refresh();
+    if (r.existing) toast('You already have a request open.');
+    pollHot();                       // the server's own version lands a moment later
   })['catch'](function(e){
-    btn.disabled = false; btn.innerHTML = ICON.hand + 'Ask for help';
+    S.help = was; render();
     keepAwake(false); toast(e.message,'err');
   });
 }
@@ -1705,7 +1774,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'f638f65b9dc4';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'db824a9e3cb9';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
