@@ -1734,6 +1734,61 @@ var POLLT = null, POLL_HOT = 4000, POLL_COLD = 15000, POLL_MS = POLL_HOT;
 function pollHot(){ POLL_MS = POLL_HOT; poll(); }              // something happened: lean in
 function pollCool(){ POLL_MS = Math.min(POLL_COLD, Math.round(POLL_MS * 1.5)); }
 function pollMs(){ return ES ? 300000 : POLL_MS; }             // a live channel makes this a net
+/* ══════════════════ THE DOORBELL ══════════════════
+ *
+ * `tick` answers one number — the newest row in today's ledger — and touches nothing else.
+ * We ask it every second and a half. Almost always the number is the same and we stop there.
+ * When it moves, we do the real refresh.
+ *
+ * MEASURED 2026-08-16. About 0.85 seconds of EVERY Apps Script call is Google's own dispatch,
+ * spent whether the script does everything or nothing. So this cannot make an answer arrive
+ * faster than roughly a second. What it changes is what asking COSTS, and therefore how often
+ * we can afford to ask.
+ *
+ * The case this rescues is the quiet salon. The full poll backs off to fifteen seconds when
+ * nothing is happening — which is exactly when a hand goes up and waits longest. The doorbell
+ * does not back off, because it does not need to.
+ *
+ * The slow poll stays underneath as a net: `tick` only sees the day ledger, so a booking moved
+ * in Wix or a word retired at the desk still arrives on the ordinary refresh.
+ */
+/* NOT SWITCHED ON FOR THE PHONE, and the reason is worth keeping.
+ *
+ * My Day's counter moves when a CHAIR writes. What a technician is waiting for is the DESK's
+ * answer, and the desk writes through the Clients project — whose web app answers MYSELF and
+ * turns away anything that is not the salon's Google login. This page cannot reach it. That
+ * is the same wall that killed the original satellite design in August.
+ *
+ * So the doorbell helps the desk hear the chairs, and does nothing for the chairs hearing the
+ * desk. Switching it on here would spend a call every second and a half to learn nothing.
+ *
+ * THE COMPLETING STEP, when it is wanted: Clients CAN call My Day — that direction is proven,
+ * the photo bridge uses it every day. A password-protected `tickBump` door on My Day, pinged
+ * by Clients after each desk write, would make ONE counter carry both projects and this loop
+ * would work. It is written up in the speed ledger; it is not built. */
+var TICKT = null, TICK_MS = 1500, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = false;
+function tickLoop(){
+  clearTimeout(TICKT);
+  TICKT = setTimeout(function(){
+    tickLoop();
+    if (!TICK_ON || document.hidden || !S.token || REFRESHING) return;
+    api('tick', {}).then(function(r){
+      TICKFAIL = 0;
+      var n = Number(r && r.n) || 0;
+      if (LAST_TICK < 0){ LAST_TICK = n; return; }      // first answer is the baseline
+      if (n === LAST_TICK) return;
+      LAST_TICK = n;
+      refresh(true);
+    })['catch'](function(){
+      /* A doorbell nobody answers must not become a hammer. Back off, and let the ordinary
+         poll carry the day until it comes back. */
+      TICKFAIL++;
+      if (TICKFAIL >= 3) TICK_MS = Math.min(20000, TICK_MS * 2);
+    });
+  }, TICK_MS + Math.round((Math.random() - 0.5) * TICK_MS * 0.3));
+}
+tickLoop();
+
 function poll(){
   clearTimeout(POLLT);
   var ms = pollMs();
@@ -1774,7 +1829,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'db824a9e3cb9';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2688517f64c9';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
