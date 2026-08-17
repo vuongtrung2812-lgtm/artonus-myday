@@ -652,7 +652,9 @@ function ackFlag(id, btn){
 function openVisit(key){
   S.key = key;
   S.visit = S.visits.filter(function(v){ return v.key===key; })[0] || null;
-  S.card = null; S.thumbs = null; S.view = 'visit';
+  /* S.missing belongs to ONE visit. Left behind it would tell the next client's screen that
+     her photographs were already taken. */
+  S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; S.view = 'visit';
   render();
   /* Her card is a second read on purpose: the day list must paint instantly, and the card is
      the expensive part. A walk-in with no number has no card at all, and says so. */
@@ -660,7 +662,7 @@ function openVisit(key){
     var s = ++S.session;
     api('techClient', { token:S.token, key:key }).then(function(c){
       if (S.session !== s || S.key !== key) return;
-      S.card = c; render(); loadThumbs();
+      S.card = c; S.missing = null; render(); loadThumbs();
     })['catch'](function(e){ S.cardErr = e.message; render(); });
   }
 }
@@ -1004,8 +1006,26 @@ function wireShots(root){
  * A card that has not arrived yet is not the same as a visit with nothing outstanding, so it
  * says so rather than offering a button that would be refused. */
 function missingBits(){
-  if (!S.card) return ['their card to open'];
-  return S.card.missing || [];
+  /* The freshest answer wins: a photograph just uploaded knows more than the card that was
+     fetched when the visit opened. */
+  if (S.missing) return S.missing;
+  if (S.card) return S.card.missing || [];
+  /* A WALK-IN WITH NO NUMBER HAS NO CARD, and openVisit deliberately does not fetch one — so
+     this used to read 'Still needed: their card to open' with no way out of it from this
+     screen at all. What is actually outstanding is the photographs, and she can take those. */
+  var got = (S.card && S.card.photos) || {};
+  return REQ.filter(function(l){ return !got[l] && !PHOTO_UP[l]; })
+            .map(function(l){ return 'the ' + l.toLowerCase() + ' photo'; });
+}
+
+/* Repaint the finish button alone, for the same reason paintPhotos exists: a full render
+   throws away a tile whose photograph is still travelling. */
+function paintFinish(){
+  var b = $('finish');
+  if (!b) { return; }
+  var short = missingBits();
+  b.disabled = !!short.length;
+  b.textContent = short.length ? 'Still needed: ' + short.join(', ') : 'They are finished';
 }
 
 /**
@@ -1228,16 +1248,32 @@ function openShot(label){
   $('veil').innerHTML = '<div class="alert" style="max-width:none;width:100%;background:none;'
     + 'box-shadow:none;padding:0;text-align:center">'
     + '<div class="lbl" style="color:#fff;opacity:.9;margin:0 0 8px">'+esc(label)+'</div>'
-    + '<div id="shotbox"><p class="lede" style="color:#fff">Opening&hellip;</p></div>'
+    /* HER OWN COPY, INSTANTLY. S.thumbs holds the same bytes the server would send back —
+       techPhotos_ returns the full stored jpeg for both the labelled and the unlabelled call,
+       so 'Opening…' was a multi-second wait to be handed something this phone already had.
+       The fetch still runs behind it, because if loadThumbs failed silently this is the only
+       way to see the photograph at all. */
+    + '<div id="shotbox">'
+    + ((S.thumbs || {})[label]
+        ? '<img src="'+(S.thumbs||{})[label]+'" alt="'+esc(label)+'" style="max-width:100%;'
+          + 'max-height:70vh;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'
+        : '<p class="lede" style="color:#fff">Opening&hellip;</p>')
+    + '</div>'
     + '<button class="btn" style="margin-top:14px" onclick="shutVeil()">Close</button></div>';
+  /* Already showing her copy? Then this is a refresh, and a refresh must never replace a
+     picture with the word "could not". */
+  var showing = !!(S.thumbs || {})[label];
   api('techPhotos', { token:S.token, key:S.key, label:label }).then(function(r){
     var src = (r.photos||{})[label];
     if (!$('shotbox')) return;
+    if (src) { S.thumbs = S.thumbs || {}; S.thumbs[label] = src; }
+    if (!src && showing) return;
     $('shotbox').innerHTML = src
       ? '<img src="'+src+'" alt="'+esc(label)+'" style="max-width:100%;max-height:70vh;'
         + 'border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'
       : '<p class="lede" style="color:#fff">That photo could not be opened.</p>';
   })['catch'](function(e){
+    if (showing) return;                       // her copy is on screen; do not blank it
     if ($('shotbox')) $('shotbox').innerHTML = '<p class="lede" style="color:#fff">'+esc(e.message)+'</p>';
   });
 }
@@ -1284,7 +1320,16 @@ function takePhoto(label){
           S.card.photos = S.card.photos || {};
           Object.keys(r.photos || {}).forEach(function(k){ S.card.photos[k] = r.photos[k]; });
         }
+        /* AND WHAT IS STILL OUTSTANDING. S.card.missing was read once when the visit opened
+           and never touched again, so she could take all three photographs, watch all three
+           tiles go green, and the Finish button would still read 'Still needed: the before
+           photo' — naming the one in front of her — and stay disabled for the rest of the
+           appointment. Nothing in the photo path recovered it; she had to back out to Today
+           and open the visit again. Kept OUTSIDE the card so it survives a visit with no
+           card at all. */
+        if (r.missing) S.missing = r.missing;
         paintPhotos();
+        paintFinish();
         if (local) { try { URL.revokeObjectURL(local); } catch (e) {} }
         /* No loadThumbs. It costs a whole round trip to fetch back bytes this phone is
            already holding, and it bumps S.session, which cancels the card fetch that a
@@ -2352,7 +2397,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'd0e6e1150af7';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '301bd93e9499';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
