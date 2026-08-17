@@ -749,13 +749,11 @@ function chairCard(v){
   if (!atTheSeat) h += photosHtml();
 
   if (can('tech.serviceChange')){
-    var tierNow = String(v.tier || '');
-    h += '<div class="lbl">Design tier</div><div class="sigrow">'
-      + ['Tier 1','Tier 2','Tier 3'].map(function(t){
-          var on = tierNow === t;
-          return '<button class="sigbtn'+(on?' sent':'')+'" data-tier="'+esc(t)+'">'
-            + (on?ICON.check:ICON.star)+esc(t)+'</button>'; }).join('')
-      + '</div>';
+    /* THE DESIGN TIER IS GONE from this screen, 17 August. The tier is already carried by
+       the service she is booked for — 'Signature Gel Mani w/ Tier 1 + Removal' says it in
+       the line above — so this was a second place to set the same fact, and two places to
+       set one fact is how they end up disagreeing. TIER_CHANGE still exists on the server
+       for anything already sent; nothing calls it from here. */
 
     var sentCamps = v.campaigns || [];
     h += '<div class="lbl">They are interested in</div><div class="sigrow">'
@@ -1485,9 +1483,6 @@ function wireChair(v){
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-camp]'), function(b){
     b.onclick = function(){ sig('CAMPAIGN_INTEREST', { name:b.getAttribute('data-camp') }, b); };
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-tier]'), function(b){
-    b.onclick = function(){ sig('TIER_CHANGE', { to:b.getAttribute('data-tier') }, b); };
   });
   if ($('finish')) $('finish').onclick = function(){ sig('FINISHED', {}, $('finish')); };
   wirePhotos();
@@ -2220,7 +2215,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '5485f682099c';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '3212c72195fa';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
