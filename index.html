@@ -791,7 +791,8 @@ function chairCard(v){
      and a stamped tick died with it, which reads as "it did not send". */
   h += '<div class="lbl">Almost finished?</div><div class="sigrow">'
     + '<button class="sigbtn'+(v.almost?' sent':'')+'"'+(v.almost?' disabled':'')+' data-sig="ALMOST_DONE">'
-    + (v.almost ? ICON.check+'Desk notified' : ICON.clock+'Tell the desk — almost done')
+    + (v.almost ? ICON.check+'The front desk knows'
+                : ICON.clock+'Tell the front desk almost done')
     + '</button></div>';
 
   /* What they are having, and changing it — reached when the client asks for something. */
@@ -2491,7 +2492,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'a5549a82d61b';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '5a56cfb8b8fc';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
