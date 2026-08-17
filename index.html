@@ -1360,7 +1360,19 @@ function takePhoto(label){
      for browsers that lack it, where the tag is honoured anyway.
    · SMOOTHING. Reducing 4032px to 1600px in one step aliases badly on fine detail — the
      exact texture we are keeping the photo for. imageSmoothingQuality:'high' costs nothing. */
-var PHOTO_MAX = 1600, PHOTO_Q = 0.88;
+/* ══ MEASURED, NOT GUESSED ══════════════════════════════════════════════════════════════
+   Trung, 17 August: 'the upload speed of the photos is too slow.'
+
+   A 3024x4032 phone photograph came out of here as a 984 KB data URL — and she takes THREE
+   in a row, so a visit posted about 3 MB up a salon's uplink before the app could tell her
+   anything had happened. Every other cost in the path (Google's ~0.85s dispatch, the Drive
+   write, the sheet append) is fixed; the bytes were the only part we chose.
+
+   1280px at q0.76 measures 472 KB on the same source image — 52% less, 1.4 MB for a whole
+   visit instead of 3 MB. At 960x1280 it still covers 82% of a 3x phone screen full-bleed,
+   and it is a record of what a hand looked like, not a print. Quality was never the thing
+   under threat here; her time was. */
+var PHOTO_MAX = 1280, PHOTO_Q = 0.76;
 
 function shrink(file, done){
   function paint(bmp, w0, h0){
@@ -2397,7 +2409,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '301bd93e9499';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'c48a8c5d00bc';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
