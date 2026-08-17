@@ -177,6 +177,11 @@
   .shotbtn{width:100%;min-height:74px;border:1px solid var(--ok);border-radius:12px;cursor:pointer;
     background:var(--ok-soft) center/cover no-repeat;position:relative;overflow:hidden;
     display:flex;align-items:flex-end;justify-content:center;padding:0}
+  /* A slot with a photograph still travelling: her picture, dimmed, with the word on it. The
+     gold ring is the same one the note composer uses, so "this is going up" looks the same
+     everywhere in the app. */
+  .shotbtn.sending{opacity:.62;border-color:var(--gold);animation:shotpulse 1.2s ease-in-out infinite}
+  .shotbtn.sending .cap{background:linear-gradient(transparent,rgba(43,11,0,.78))}
   .shotbtn .cap{width:100%;background:linear-gradient(to top,rgba(43,11,0,.72),rgba(43,11,0,0));
     color:#fff;font-size:11px;font-weight:900;letter-spacing:.6px;padding:12px 0 4px}
   .retake{background:none;border:none;color:var(--muted);font-family:inherit;font-size:11px;
@@ -1164,11 +1169,22 @@ function openAddon(){
     });
   });
 }
+/* Which of the three are in the air right now. Per LABEL, so Before, After and Colour can be
+   uploading at the same time without knowing about each other — a technician does not take
+   three photographs and wait politely between them. */
+var PHOTO_UP = {};
+
 function photosHtml(){
   var got = (S.card && S.card.photos) || {}, thumb = S.thumbs || {};
-  return '<div class="lbl">Photos of this visit — required</div><div class="sigrow">'
+  return '<div id="photorow"><div class="lbl">Photos of this visit — required</div><div class="sigrow">'
     + REQ.map(function(l){
-        var has = !!got[l], src = thumb[l];
+        /* Taken, or on its way — either way the slot shows the picture. Waiting for the
+           server to agree before showing her own photograph is what made this feel broken. */
+        var up = !!PHOTO_UP[l], has = !!got[l] || up, src = thumb[l];
+        if (up) return '<div class="shot" style="flex:1">'
+          + '<button class="shotbtn sending"'
+          + (src?' style="background-image:url('+src+')"':'')+'>'
+          + '<span class="cap">'+l+' · Adding…</span></button></div>';
         /* Once it is taken the slot becomes the picture itself, and tapping opens it full
            size. Retaking is deliberately a second, smaller tap — the common action here is
            looking, not replacing. */
@@ -1183,7 +1199,18 @@ function photosHtml(){
           + ICON.cam+'<span>'+l+'</span>'
           + '<span style="font-size:9.5px;letter-spacing:1px;font-weight:900;opacity:.8">REQUIRED</span></button>';
       }).join('')
-    + '</div>';
+    + '</div></div>';
+}
+
+/* Repaint ONLY the photo row. render() rebuilds the whole screen, and a full rebuild while a
+   second photograph is in the air throws away the tile that was showing it. */
+function paintPhotos(){
+  var host = $('photorow');
+  if (!host) { render(); return; }
+  var tmp = document.createElement('div');
+  tmp.innerHTML = photosHtml();
+  host.parentNode.replaceChild(tmp.firstChild, host);
+  wirePhotos();
 }
 
 /* One round trip for all three thumbnails when the card opens. Drive's own small rendition
@@ -1231,12 +1258,43 @@ function takePhoto(label){
   i.type='file'; i.accept='image/*';
   i.onchange = function(){
     var f = i.files && i.files[0]; if (!f) return;
-    toast('Saving the '+label.toLowerCase()+' photo…');
+    /* ON SCREEN NOW, straight from the file, before the shrink and long before the server.
+       shrink() alone is most of a second on a 12-megapixel photograph, and the upload is
+       another one or two — so the old code left her looking at an unchanged red REQUIRED
+       button for three seconds with only a toast, which reads as nothing happened. */
+    var key = S.key, local = '';
+    try { local = URL.createObjectURL(f); } catch (e) {}
+    S.thumbs = S.thumbs || {};
+    if (local) S.thumbs[label] = local;
+    PHOTO_UP[label] = true;
+    paintPhotos();
+
     shrink(f, function(dataUrl){
-      api('techPhoto', { token:S.token, key:S.key, label:label, data:dataUrl }).then(function(r){
-        if (S.card) S.card.photos = r.photos;
-        toast(' '+label+' saved.', null, ICON.check); render(); loadThumbs();
-      })['catch'](function(e){ toast(e.message,'err'); });
+      /* Keep the shrunk copy: it is what the server will hold, and having it here means the
+         tile never has to be fetched back. */
+      S.thumbs[label] = dataUrl;
+      if (PHOTO_UP[label]) paintPhotos();
+      api('techPhoto', { token:S.token, key:key, label:label, data:dataUrl }).then(function(r){
+        PHOTO_UP[label] = false;
+        if (S.key !== key) return;              // she moved on; the photo is still saved
+        /* MERGE, never replace. r.photos is this execution's view of the visit, and a photo
+           that went up while this one was travelling is not in it — assigning the whole
+           object would erase the other two slots she just filled. */
+        if (S.card){
+          S.card.photos = S.card.photos || {};
+          Object.keys(r.photos || {}).forEach(function(k){ S.card.photos[k] = r.photos[k]; });
+        }
+        paintPhotos();
+        if (local) { try { URL.revokeObjectURL(local); } catch (e) {} }
+        /* No loadThumbs. It costs a whole round trip to fetch back bytes this phone is
+           already holding, and it bumps S.session, which cancels the card fetch that a
+           second photograph started. That is most of "it does not work back to back". */
+      })['catch'](function(e){
+        PHOTO_UP[label] = false;
+        if (S.thumbs) delete S.thumbs[label];
+        paintPhotos();
+        toast(e.message,'err');
+      });
     });
   };
   i.click();
@@ -2294,7 +2352,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '913fa9b15325';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'd0e6e1150af7';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
