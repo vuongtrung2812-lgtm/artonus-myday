@@ -1131,6 +1131,7 @@ function withMenu(then){
 var SVC_OP = '';
 function openSvc(){
   var picked = '';
+  var sending = false;                              // see openAddon — a repaint must not unlock
   SVC_OP = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
@@ -1151,7 +1152,9 @@ function openSvc(){
           }).join('')
         : '<p class="lede">Nothing matches. Ask the front desk.</p>';
       Array.prototype.forEach.call($('svclist').querySelectorAll('[data-svc]'), function(b){
+        b.disabled = sending;
         b.onclick = function(){
+          if (sending) return;
           /* One service, so choosing is choosing — tapping the chosen one again unchooses it. */
           var to = b.getAttribute('data-svc');
           picked = (picked === to) ? '' : to;
@@ -1160,26 +1163,37 @@ function openSvc(){
         };
       });
       var go = $('svcgo');
-      go.disabled = !picked;
-      go.innerHTML = picked ? 'Send &mdash; ' + esc(picked) : 'Send';
+      go.disabled = sending || !picked;
+      go.innerHTML = sending ? 'Sending&hellip;'
+                             : (picked ? 'Send &mdash; ' + esc(picked) : 'Send');
+      if ($('svcq')) $('svcq').disabled = sending;
     }
     $('svcq').oninput = paint; paint(); $('svcq').focus();
     $('svcgo').onclick = function(){
       if (!picked) return;
-      var to = picked, go = $('svcgo');
-      go.disabled = true; go.innerHTML = 'Sending&hellip;';
+      if (sending) return;
+      var to = picked;
+      sending = true; paint();
       if (!SVC_OP) SVC_OP = opId('svc');
       api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to },
                       opId: SVC_OP })
-        .then(function(){ SVC_OP = ''; shutVeil(); toast('The desk has it — '+to); refresh(true); })
-        ['catch'](function(e){ go.disabled = false; go.innerHTML = 'Send &mdash; ' + esc(to);
-                               toast(e.message,'err'); });
+        .then(function(){ sending = false; SVC_OP = ''; shutVeil();
+                          toast('The desk has it — '+to); refresh(true); })
+        ['catch'](function(e){ sending = false; paint(); toast(e.message,'err'); });
     };
   });
 }
 var ADD_OP = '';
 function openAddon(){
   var picked = {};
+  /* ONE SEND AT A TIME. Trung, 17 August: 'I can still spam, when its sending, I can just
+     select something else and send again.'
+
+     He could, and the hole was paint(): tapping a chip rebuilt the whole sheet, and the
+     rebuilt Send button came back enabled because it is drawn from the selection and knew
+     nothing about a request already in the air. Disabling the button was never enough while
+     something else could redraw it. */
+  var sending = false;
   ADD_OP = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
@@ -1208,7 +1222,9 @@ function openAddon(){
       }).join('');
 
       Array.prototype.forEach.call($('addlist').querySelectorAll('[data-add]'), function(b){
+        b.disabled = sending;
         b.onclick = function(){
+          if (sending) return;                       // nothing changes under a send
           var name = b.getAttribute('data-add');
           if (picked[name]) delete picked[name];
           else {
@@ -1236,18 +1252,20 @@ function openAddon(){
       });
 
       var names = Object.keys(picked), go = $('addgo');
-      go.disabled = !names.length;
-      go.innerHTML = names.length
-        ? 'Send ' + names.length + (names.length === 1 ? ' add-on' : ' add-ons')
-        : 'Send';
+      /* The in-flight state is drawn from the flag, so it SURVIVES a repaint. */
+      go.disabled = sending || !names.length;
+      go.innerHTML = sending ? 'Sending&hellip;'
+        : (names.length ? 'Send ' + names.length + (names.length === 1 ? ' add-on' : ' add-ons')
+                        : 'Send');
+      list.forEach(function(a){ var q = $(qid(a.name)); if (q) q.disabled = sending; });
     }
     paint();
 
     $('addgo').onclick = function(){
       var names = Object.keys(picked);
       if (!names.length) return;
-      var go = $('addgo');
-      go.disabled = true; go.innerHTML = 'Sending&hellip;';
+      if (sending) return;
+      sending = true; paint();
       /* ONE MESSAGE, NOT ONE PER ADD-ON. Sending them in a row was three locks, three
          doorbells and three separate lines on the desk's screen for what was one press —
          which is what made a mis-tap look like spam and gave the desk nothing to undo. */
@@ -1256,7 +1274,7 @@ function openAddon(){
                        items: names.map(function(n){
                          return { kind:'ADDON', payload:{ name:n, qty:picked[n] } }; }) })
         .then(function(){
-          ADD_OP = '';
+          sending = false; ADD_OP = '';
           shutVeil();
           toast(names.length === 1 ? 'Added — the desk has it'
                                    : 'Added ' + names.length + ' — the desk has them');
@@ -1266,8 +1284,7 @@ function openAddon(){
           /* ADD_OP is deliberately KEPT. Pressing send again reuses it, so if the first
              attempt actually landed the server answers from memory instead of writing a
              second copy — the whole reason the timeout above is safe. */
-          go.disabled = false;
-          go.innerHTML = 'Send ' + names.length + (names.length === 1 ? ' add-on' : ' add-ons');
+          sending = false; paint();
           toast(e.message, 'err');
         });
     };
@@ -2421,7 +2438,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '49076969a20a';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '0f0e3e2b2e41';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
