@@ -103,8 +103,15 @@
     font-family:inherit;font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;
     justify-content:center;gap:8px}
   .btn:disabled{opacity:.5}
-  /* Two decisions stacked are two decisions, not one tall block. */
-  .btn+.btn,.btn+.skip,.skip+.btn,.skip+.skip,.sigbtn+.sigbtn{margin-top:var(--s2)}
+  /* Two decisions STACKED are two decisions, not one tall block.
+     ONLY WHEN STACKED. This rule shipped without the :not() and every horizontal row on the
+     phone came out wrong in the same way: the first button kept its place and every one after
+     it was pushed down 10px, and because the row stretches to a common height, pushing them
+     down made them SHORTER too. Trung saw it as 'the first chip is larger than the others' —
+     three times over, on the photos, the minutes and the two service buttons. A margin meant
+     for a column has no business inside a row. */
+  .btn+.btn,.btn+.skip,.skip+.btn,.skip+.skip{margin-top:var(--s2)}
+  .sigrow>*+*,.row2>*+*,.chips>*+*{margin-top:0}
   .card+.lbl{margin-top:var(--s4)}
   .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .ghost{background:var(--card);border:1px solid var(--line);color:var(--espresso)}
@@ -292,8 +299,11 @@
      dozen times a day; it should look like it belongs to Artonus. */
   .alert .hd .hdmark{height:16px;width:auto;margin-right:8px;vertical-align:-3px;opacity:.95}
   /* The running list of what this chair has already told the desk. */
-  .sentbar{display:flex;gap:9px;align-items:flex-start;background:var(--ok-soft);
-    border:1px solid var(--ok);border-radius:12px;padding:10px 12px;margin:0 0 10px;
+  /* It answers the two buttons above it, so it needs the gap that says so. It was sitting
+     flush against them and read as part of the same control. */
+  .sentbar{display:flex;gap:8px;align-items:flex-start;background:var(--ok-soft);
+    border:1px solid var(--ok);border-radius:12px;padding:12px 13px;
+    margin:var(--s2) 0 var(--s2);
     font-size:13.5px;line-height:1.45}
   /* WIDTH AND HEIGHT ARE NOT OPTIONAL. An inline SVG with a viewBox and no explicit size
      expands to fill its box — the design-brief star rendered the height of the card and shoved
@@ -2176,7 +2186,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '41d68d3c5505';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '8bdde399fa34';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
