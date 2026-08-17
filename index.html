@@ -411,7 +411,7 @@ var ICON = {
 };
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
-var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[],
+var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{},
           key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
@@ -1852,9 +1852,40 @@ function preview(kind, payload){
   };
 }
 
+/**
+ * ONE GLOBAL BUSY FLAG WAS SWALLOWING PRESSES SILENTLY.
+ *
+ * Trung, 17 August: 'when I ask for more time, changing from 10 to 15 to 30, there is a delay
+ * for when the box goes green, which lead me to double click and thought it didnt work.'
+ *
+ * There was no delay. `if (S.busy) return;` threw the press away — no green, no toast, no
+ * anything — because +10 was still in the air. He was not waiting for a slow button; he was
+ * pressing a button that had decided not to listen, which is worse and looks identical.
+ *
+ * It is now keyed by the ACT, not by the app. Pressing +15 while +10 is in flight goes
+ * straight through: MORE_TIME SETS rather than adds, on the server by design, so the newest
+ * number simply wins. Pressing the SAME thing twice is still swallowed — and that one is
+ * fine, because the button is already showing itself as sent.
+ */
+function sigKey_(kind, payload){
+  var d = payload || {};
+  /* MORE_TIME is deliberately keyed WITHOUT the minutes, so a second press supersedes rather
+     than racing: two different numbers must never both be in the air. */
+  if (kind === 'MORE_TIME') return 'MORE_TIME';
+  return kind + ':' + (d.name || d.to || d.mins || '');
+}
 function sig(kind, payload, btn){
-  if (S.busy) return;
-  S.busy = true;
+  if (!S.busy || typeof S.busy !== 'object') S.busy = {};
+  var lock = sigKey_(kind, payload);
+  var same = S.busy[lock];
+  /* The same act, already going. The screen is already showing it; pressing again changes
+     nothing and must not send again. */
+  if (same && same.same === JSON.stringify(payload || {})) return;
+  /* A DIFFERENT number for the same act supersedes the one in flight — its answer is told to
+     stop touching the screen when it lands. */
+  if (same) same.stale = true;
+  var me = { same: JSON.stringify(payload || {}), stale: false };
+  S.busy[lock] = me;
   var el = (typeof btn === 'string') ? $(btn) : btn;
   var was = el && el.innerHTML;
   /* PREVIEW FIRST, then stamp. It used to be the other way round: the stamp went on and
@@ -1872,15 +1903,19 @@ function sig(kind, payload, btn){
     el.className = (el.className || '').replace(' sent','') + ' sent';
   }
   api('signal', { token:S.token, key:S.key, kind:kind, payload:payload, opId: op }).then(function(){
-    S.busy = false;
+    if (S.busy[lock] === me) delete S.busy[lock];
     if (el) el.disabled = false;
+    if (me.stale) return;              // a newer number is on screen; leave it alone
     /* NO refresh() here on purpose. The two calls that used to run at this point are what he
        was waiting through, and neither told him anything the preview has not already drawn.
        pollHot leans the ordinary poll in, so the server's own version lands a moment later
        and quietly replaces the guess. */
     pollHot();
   })['catch'](function(e){
-    S.busy = false;
+    if (S.busy[lock] === me) delete S.busy[lock];
+    /* A superseded request that fails must NOT roll back — what is on screen belongs to the
+       newer press, and undoing it would take away a number she did choose. */
+    if (me.stale) return;
     undo();
     if (el && document.body.contains(el)){
       el.disabled=false; el.innerHTML = was;
@@ -2492,7 +2527,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '5a56cfb8b8fc';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'e74e881537e0';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
