@@ -323,6 +323,11 @@
     min-height:52px;padding:9px 13px;margin-bottom:var(--s1);font-family:inherit;font-size:14.5px;
     font-weight:800;color:var(--ink);cursor:pointer}
   .pick:disabled{opacity:.55}
+  /* CHOSEN, not sent. Nothing leaves the phone until she presses Send, so this state has to
+     look like a decision she can still take back — the salon's gold, not the espresso a
+     finished action wears. */
+  .pick.on{background:var(--gold-soft);border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+  .pick.on .quiet{color:var(--espresso)}
   .pick .quiet{font-weight:700;font-size:12.5px;color:var(--muted)}
   /* The salon's own mark in the alert header, not a stock bell. A technician sees this a
      dozen times a day; it should look like it belongs to Artonus. */
@@ -1076,12 +1081,24 @@ function withMenu(then){
   api('menu', { token:S.token }).then(function(r){ MENU = r; then(r); })
     ['catch'](function(e){ toast(e.message,'err'); });
 }
+/* ══ PICK, THEN SEND ═══════════════════════════════════════════════════════════════════════
+   Trung, 17 August: 'the change the service and the add an add-on sends automatically send
+   when I click on a chip, but I want it to be an option to select then the send is manual.'
+
+   Tapping a name used to BE the send — one mis-tap and the desk had a service change she did
+   not mean, and correcting it meant a second signal explaining the first. The desk's ticket
+   sheet learned this a day earlier: choose everything, look at it, then send once.
+
+   Both sheets keep the same shape now — a chosen row, a Send button that names what it is
+   about to do, and Cancel meaning cancel. */
 function openSvc(){
+  var picked = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
     + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
     + '<div id="svclist" class="picklist"><p class="lede">Loading the menu&hellip;</p></div>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:var(--s2)">Cancel</button></div>';
+    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
+    + '<button class="btn" id="svcgo" style="flex:1" disabled>Send</button></div></div>';
   withMenu(function(m){
     function paint(){
       var q = ($('svcq').value||'').trim().toLowerCase();
@@ -1090,54 +1107,116 @@ function openSvc(){
       }).slice(0, 40);
       $('svclist').innerHTML = hits.length
         ? hits.map(function(s){
-            return '<button class="pick" data-svc="'+esc(s.name)+'">'
+            return '<button class="pick'+(picked===s.name?' on':'')+'" data-svc="'+esc(s.name)+'">'
               + '<b>'+esc(s.name)+'</b><span class="quiet">'+esc(s.group)+' · '+money(s.price)+'</span></button>';
           }).join('')
         : '<p class="lede">Nothing matches. Ask the front desk.</p>';
       Array.prototype.forEach.call($('svclist').querySelectorAll('[data-svc]'), function(b){
         b.onclick = function(){
+          /* One service, so choosing is choosing — tapping the chosen one again unchooses it. */
           var to = b.getAttribute('data-svc');
-          b.disabled = true; b.textContent = 'Sending…';
-          api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to } })
-            .then(function(){ shutVeil(); toast('The desk has it — '+to); refresh(true); })
-            ['catch'](function(e){ toast(e.message,'err'); paint(); });
+          picked = (picked === to) ? '' : to;
+          paint();
         };
       });
+      var go = $('svcgo');
+      go.disabled = !picked;
+      go.innerHTML = picked ? 'Send &mdash; ' + esc(picked) : 'Send';
     }
     $('svcq').oninput = paint; paint(); $('svcq').focus();
+    $('svcgo').onclick = function(){
+      if (!picked) return;
+      var to = picked, go = $('svcgo');
+      go.disabled = true; go.innerHTML = 'Sending&hellip;';
+      api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to } })
+        .then(function(){ shutVeil(); toast('The desk has it — '+to); refresh(true); })
+        ['catch'](function(e){ go.disabled = false; go.innerHTML = 'Send &mdash; ' + esc(to);
+                               toast(e.message,'err'); });
+    };
   });
 }
 function openAddon(){
+  var picked = {};
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
     + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:var(--s2)">Cancel</button></div>';
+    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
+    + '<button class="btn" id="addgo" style="flex:1" disabled>Send</button></div></div>';
   withMenu(function(m){
     /* Only this chair's family. All seven used to be offered everywhere, told apart by
        "(pedicure)" in the label — so a manicure chair was shown Gel and Removal, which mean
        something else there, and the parenthetical rode along onto the desk's ticket. */
     var fam = /pedicure/i.test(String((S.visit && S.visit.svc) || '')) ? 'pedicure' : 'manicure';
     var list = (m.addons||[]).filter(function(a){ return !a.family || a.family === fam; });
-    $('addlist').innerHTML = '<p class="lede" style="margin:0 0 6px">For a <b>'+fam+'</b>.</p>'
-      + list.map(function(a){
-      return '<div class="row2" style="margin-top:var(--s2)">'
-        + '<button class="pick" data-add="'+esc(a.name)+'" style="flex:1"><b>'+esc(a.label)+'</b>'
-        + '<span class="quiet">'+(a.price?money(a.price)+(a.per?' per '+a.per:''):'no extra charge')+'</span></button>'
-        + (a.per ? '<input class="in" style="width:74px;margin:0" type="text" inputmode="numeric" '
-                 + 'pattern="[0-9]*" value="1" id="q_'+esc(a.name).replace(/\W/g,'')+'">' : '')
-        + '</div>';
-    }).join('');
-    Array.prototype.forEach.call($('addlist').querySelectorAll('[data-add]'), function(b){
-      b.onclick = function(){
-        var name = b.getAttribute('data-add');
-        var qf = $('q_'+name.replace(/\W/g,''));
-        b.disabled = true;
+    var qid = function(n){ return 'q_' + String(n).replace(/\W/g,''); };
+
+    function paint(){
+      $('addlist').innerHTML = '<p class="lede" style="margin:0 0 6px">For a <b>'+fam+'</b>.</p>'
+        + list.map(function(a){
+        var on = !!picked[a.name];
+        return '<div class="row2" style="margin-top:var(--s2)">'
+          + '<button class="pick'+(on?' on':'')+'" data-add="'+esc(a.name)+'" style="flex:1">'
+          + '<b>'+esc(a.label)+'</b>'
+          + '<span class="quiet">'+(a.price?money(a.price)+(a.per?' per '+a.per:''):'no extra charge')+'</span></button>'
+          + (a.per ? '<input class="in" style="width:74px;margin:0" type="text" inputmode="numeric" '
+                   + 'pattern="[0-9]*" value="'+(on ? picked[a.name] : 1)+'" id="'+qid(a.name)+'">' : '')
+          + '</div>';
+      }).join('');
+
+      Array.prototype.forEach.call($('addlist').querySelectorAll('[data-add]'), function(b){
+        b.onclick = function(){
+          var name = b.getAttribute('data-add');
+          if (picked[name]) delete picked[name];
+          else {
+            var qf = $(qid(name));
+            picked[name] = qf ? Math.max(1, Number(qf.value)||1) : 1;
+          }
+          paint();
+        };
+      });
+      /* A count typed after choosing has to stick, or the number sent is not the number she
+         is looking at. */
+      list.forEach(function(a){
+        var qf = $(qid(a.name));
+        if (qf) qf.oninput = function(){
+          if (picked[a.name]) picked[a.name] = Math.max(1, Number(qf.value)||1);
+        };
+      });
+
+      var names = Object.keys(picked), go = $('addgo');
+      go.disabled = !names.length;
+      go.innerHTML = names.length
+        ? 'Send ' + names.length + (names.length === 1 ? ' add-on' : ' add-ons')
+        : 'Send';
+    }
+    paint();
+
+    $('addgo').onclick = function(){
+      var names = Object.keys(picked);
+      if (!names.length) return;
+      var go = $('addgo');
+      go.disabled = true; go.innerHTML = 'Sending&hellip;';
+      /* One at a time, in order, so the desk's ledger reads the way she chose them and a
+         failure names the one that failed rather than the whole basket. */
+      var i = 0;
+      (function next(){
+        if (i >= names.length){
+          shutVeil();
+          toast(names.length === 1 ? 'Added — the desk has it'
+                                   : 'Added ' + names.length + ' — the desk has them');
+          refresh(true);
+          return;
+        }
+        var name = names[i++];
         api('signal', { token:S.token, key:S.key, kind:'ADDON',
-                        payload:{ name:name, qty: qf ? Number(qf.value)||1 : 1 } })
-          .then(function(){ shutVeil(); toast('Added — the desk has it'); refresh(true); })
-          ['catch'](function(e){ b.disabled=false; toast(e.message,'err'); });
-      };
-    });
+                        payload:{ name:name, qty: picked[name] } })
+          .then(next)
+          ['catch'](function(e){
+            go.disabled = false; go.innerHTML = 'Send ' + (names.length - i + 1) + ' left';
+            toast(name + ' did not send: ' + e.message, 'err');
+          });
+      })();
+    };
   });
 }
 /* Which of the three are in the air right now. Per LABEL, so Before, After and Colour can be
@@ -2285,7 +2364,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2b9d0e8d9892';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'd5daf382b910';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
