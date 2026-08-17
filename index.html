@@ -476,13 +476,12 @@ function api(name, payload){
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ name: name, payload: payload || {} })
   }).then(function(r){
+    /* Stop the clock the moment the response lands, not when the body finishes reading —
+       a large answer arriving slowly is not a stall. */
     stop();
     return r.text();
-    return r;
   }, function(e){
     stop(); throw e;
-  }).then(function(r){
-    return r.text();
   }).then(function(t){
     done(); return t;
   }, function(e){
@@ -2422,7 +2421,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2651250f9198';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '49076969a20a';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
