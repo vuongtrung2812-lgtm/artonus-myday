@@ -1,0 +1,55 @@
+# WHY THIS FILE EXISTS
+#
+# GitHub's built-in Pages deployment ("legacy" build_type) runs actions/jekyll-build-pages,
+# and on 17 August 2026 codeload started answering 429 Too Many Requests for that action's
+# tarball. Three deploys failed in a row, ~50 minutes apart, with the site's own code
+# perfectly fine and sitting on the remote unpublished:
+#
+#   Failed to download archive 'actions/jekyll-build-pages' after 3 attempts. 429.
+#
+# This site is plain static HTML. It never needed Jekyll. Building it ourselves drops that
+# dependency entirely and, as a bonus, lets us say exactly which files go public instead of
+# relying on Jekyll's underscore-prefix convention to hide the helper scripts.
+name: Deploy My Day
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes one that is still waiting.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # AN ALLOWLIST, NOT AN EXCLUDE LIST. Under the old Jekyll build the _-prefixed helper
+      # scripts were skipped by convention. Naming what ships means a new helper dropped in
+      # this folder never becomes a public URL by accident.
+      - name: Collect the site
+        run: |
+          mkdir -p _site
+          cp index.html build.txt manifest.webmanifest CNAME _site/
+          cp icon-180.png icon-512.png myday-qr.png _site/
+          touch _site/.nojekyll
+          ls -la _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
