@@ -465,17 +465,32 @@ function api(name, payload){
   var done = function(){ INFLIGHT = Math.max(0, INFLIGHT - 1); };
   var slow = /Photo|Shot|Upload/i.test(String(name));
   var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-  var timer = setTimeout(function(){
-    if (ctl) ctl.abort();
-  }, slow ? API_TIMEOUT_SLOW : API_TIMEOUT);
-  var stop = function(){ clearTimeout(timer); };
-  return fetch(BOOK, {
+  var timer = null, bell = null;
+
+  /* THE ABORT DOES NOT STOP THE SERVER, AND THAT IS THE WHOLE POINT.
+     Apps Script runs a request to completion no matter what the browser does with the socket.
+     So a timeout here never cancels a write — it only stops HER waiting. The write may well
+     land after she has been told it did not. That is why the opId below is load-bearing
+     rather than a nicety: it is the only thing that makes giving up safe.
+
+     AND A RACE, NOT JUST AN ABORT. abort() needs AbortController; without it — an older phone
+     — the old code set a timer that called nothing and the promise hung for ever. Racing the
+     fetch against a rejecting timer gives every device a deadline, and the abort on top is
+     what frees the socket where it exists. */
+  var deadline = new Promise(function(_, reject){
+    timer = setTimeout(function(){
+      if (ctl) { try { ctl.abort(); } catch (e) {} }
+      var err = new Error('timeout'); err.name = 'AbortError'; reject(err);
+    }, slow ? API_TIMEOUT_SLOW : API_TIMEOUT);
+  });
+  var stop = function(){ if (timer) clearTimeout(timer); timer = null; };
+  return Promise.race([deadline, fetch(BOOK, {
     method: 'POST',
     redirect: 'follow',
     signal: ctl ? ctl.signal : undefined,
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ name: name, payload: payload || {} })
-  }).then(function(r){
+  })]).then(function(r){
     /* Stop the clock the moment the response lands, not when the body finishes reading —
        a large answer arriving slowly is not a stall. */
     stop();
@@ -2438,7 +2453,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '0f0e3e2b2e41';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2aa55c331dc4';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
