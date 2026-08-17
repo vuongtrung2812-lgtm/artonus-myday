@@ -537,14 +537,14 @@ function dropToken(){ try{ localStorage.removeItem('artonus_chair'); }catch(e){}
 
 /* ─────────────────────────── enrolment ─────────────────────────── */
 function viewEnrol(){
-  $('app').innerHTML = head('Technician access')
+  paintInto('app', head('Technician access')
     + '<div class="card"><h3>Join with your code</h3>'
     + '<p class="lede">The front desk gives you a code. It works once, for this phone, '
     + 'and stops working after a day.</p>'
     + '<input class="in" id="code" type="text" inputmode="latin" autocapitalize="characters" '
     + 'autocomplete="off" maxlength="9" placeholder="8-character code" style="text-align:center;'
     + 'font-size:22px;letter-spacing:5px;font-weight:900">'
-    + '<button class="btn" id="join">Use this phone</button></div>';
+    + '<button class="btn" id="join">Use this phone</button></div>');
   $('code').oninput = function(){ this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
   $('join').onclick = function(){
     var c = $('code').value.trim();
@@ -600,9 +600,9 @@ function loadDay(){
   })['catch'](function(e){
     /* A dead token is the ordinary end of a device's life, not an error to shout about. */
     if (/not signed in/.test(e.message)){ dropToken(); S.token=''; S.view='enrol'; render(); return; }
-    $('app').innerHTML = head('Your day')
+    paintInto('app', head('Your day')
       + '<div class="card"><h3>Could not load your day</h3><p class="lede">'+esc(e.message)+'</p>'
-      + '<button class="btn" onclick="loadDay()">Try again</button></div>';
+      + '<button class="btn" onclick="loadDay()">Try again</button></div>');
   });
 }
 /* FAIL CLOSED. This used to read `!S.caps.length ||`, so an empty capability list — a poll
@@ -667,7 +667,7 @@ function viewToday(){
     });
   }
   h += dockHtml();
-  $('app').innerHTML = h;
+  paintInto('app', h);
 }
 
 /**
@@ -738,7 +738,7 @@ function viewVisit(){
     h += chairCard(v);
   }
   h += dockHtml();
-  $('app').innerHTML = h;
+  paintInto('app', h);
   if ($('seat')) $('seat').onclick = function(){ sig('SEATED', {}, 'seat'); };
   wireChair(v);
   wireShots(document);
@@ -1843,11 +1843,33 @@ function applyPending(){
 /** Record the ask, draw it, and hand back the way to take it off again. */
 function preview(kind, payload){
   if (!S.visit) return function(){};
-  var p = { kind:kind, payload:payload || {}, key:S.visit.key, at:Date.now() };
+  var v0 = S.visit;
+  /* What it looked like BEFORE the guess, so a refusal can put it back exactly. */
+  var p = { kind:kind, payload:payload || {}, key:v0.key, at:Date.now(),
+            wasMoreTime: v0.moreTime, wasAlmost: v0.almost, wasTier: v0.tier,
+            wasState: v0.state };
   PEND.push(p);
   applyPending(); render();
   return function undo(){
     PEND = PEND.filter(function(x){ return x !== p; });
+    /* THE GUESS WAS MUTATED ONTO THE VISIT, so dropping it from the list is not enough —
+       applyPending only ever ADDS to what the poll last handed us. A refused signal left
+       v.moreTime, v.almost and the rest exactly as the guess had set them, so a rejection
+       carried on reading as sent until a poll happened to replace the whole visit.
+       Take the guess back off, then re-apply whatever is genuinely still in flight. */
+    var v = S.visit;
+    if (v && v.key === p.key){
+      var d = p.payload || {};
+      if (p.kind === 'MORE_TIME')   v.moreTime = p.wasMoreTime;
+      if (p.kind === 'ALMOST_DONE') v.almost = p.wasAlmost;
+      if (p.kind === 'TIER_CHANGE') v.tier = p.wasTier;
+      if (PREVIEW_STATE[p.kind])    v.state = p.wasState;
+      if (p.kind === 'ADDON' && v.addons)
+        v.addons = v.addons.filter(function(a){ return a.name !== d.name; });
+      if (p.kind === 'CAMPAIGN_INTEREST' && v.campaigns)
+        v.campaigns = v.campaigns.filter(function(x){ return x !== d.name; });
+      applyPending();
+    }
     render();
   };
 }
@@ -2527,7 +2549,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'e74e881537e0';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '9bc789a74989';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -2684,8 +2706,67 @@ function render(){
   return viewToday();
 }
 
-/* The help timers tick without a round trip — the clock is local, the state is the ledger's. */
-setInterval(function(){ if (S.token && S.help) render(); }, 1000);
+/**
+ * PAINT ONLY WHAT CHANGED, AND NEVER TAKE THE SCREEN OUT FROM UNDER A FINGER.
+ *
+ * Every poll — and, with a hand up, every SECOND — replaced the entire screen. Three
+ * consequences, all of which Trung has now reported in one form or another:
+ *
+ *   a tap landing during the rebuild hits a node that is being replaced, and is lost
+ *   whatever she was typing in "Or type the minutes" is wiped mid-entry
+ *   the screen visibly flickers, which reads as the app doing something wrong
+ *
+ * So: if the html is byte-identical to what is already there, do nothing at all — which is
+ * the common case by far, because most polls change nothing. When it does differ, carry the
+ * focused element, its value and its caret across the swap.
+ */
+var LAST_HTML = {};
+function paintInto(id, html){
+  var host = $(id);
+  if (!host) return;
+  if (LAST_HTML[id] === html) return;            // nothing changed; leave her screen alone
+  LAST_HTML[id] = html;
+
+  /* What she is in the middle of, so the rebuild can hand it back. */
+  var act = document.activeElement, keep = null;
+  if (act && host.contains(act) && (act.tagName === 'INPUT' || act.tagName === 'TEXTAREA')){
+    keep = { id: act.id, value: act.value,
+             start: act.selectionStart, end: act.selectionEnd };
+  }
+  /* And anything else she has typed but is not currently in. */
+  var typed = {};
+  Array.prototype.forEach.call(host.querySelectorAll('input,textarea'), function(el){
+    if (el.id && el.value) typed[el.id] = el.value;
+  });
+
+  host.innerHTML = html;
+
+  Object.keys(typed).forEach(function(k){
+    var el = $(k);
+    if (el && !el.value) el.value = typed[k];
+  });
+  if (keep && keep.id){
+    var back = $(keep.id);
+    if (back){
+      back.value = keep.value;
+      try { back.focus(); back.setSelectionRange(keep.start, keep.end); } catch (e) {}
+    }
+  }
+}
+
+/* The help timers tick without a round trip — the clock is local, the state is the ledger's.
+   It updates the CLOCK, not the world: re-rendering everything once a second to move two
+   digits is what made the whole screen unusable while a hand was up. */
+setInterval(function(){
+  if (!S.token || !S.help) return;
+  var t = document.querySelector('.t2');
+  if (!t) return render();                       // the bar is not drawn yet; draw it
+  var h = S.help;
+  var ms = (h.ack && h.ack.atMs) ? (Date.now() - helpMs(h.ack.atMs))
+                                 : (Date.now() - helpMs(h.atMs));
+  var next = mmss(ms);
+  if (t.textContent !== next) t.textContent = next;
+}, 1000);
 
 (function boot(){
   /* A few seconds after the day is on screen, not before it. Her chair is the urgent thing;
