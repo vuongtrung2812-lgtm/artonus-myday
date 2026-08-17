@@ -1618,10 +1618,21 @@ function applyPending(){
                                     [{ name: d.name, label: d.label || d.name, price: 0 }]);
     if (p.kind === 'CAMPAIGN_INTEREST' && d.name && (v.campaigns || []).indexOf(d.name) < 0)
       v.campaigns = (v.campaigns || []).concat([d.name]);
+    /* ALMOST DONE IS A FLAG, NOT A STATE, and this list is the only thing that draws the
+       button. Trung, 17 August: 'the tell the desk almost done button has no loading
+       indication so I double clicked, thinking it didnt work.'
+
+       He was right to think it. sig() stamps the button with a tick and then, on the very
+       next line, preview() calls render() and rebuilds the whole card — so the stamp lived
+       for microseconds and the rebuilt button came back reading 'Tell the desk — almost
+       done', because nothing here had ever set v.almost. PREVIEW_STATE sets v.state to
+       'almost done'; chairCard reads v.almost. Two names for one fact, and the preview was
+       writing the one nobody drew.
+
+       THE PLACE, NOT THE STAMP — the same lesson as the clock and the add-ons. A guess that
+       lives in the model survives every redraw; one painted onto a DOM node does not. */
+    if (p.kind === 'ALMOST_DONE') v.almost = true;
     if (PREVIEW_STATE[p.kind]) v.state = PREVIEW_STATE[p.kind];
-    v.sent = (v.sent || []).concat([{ id:'pending', kind:p.kind, label:pendLabel(p),
-                                      needsDone:true, waitedSec:Math.round((now-p.at)/1000),
-                                      ack:null, mine:true }]);
   });
 }
 
@@ -1642,9 +1653,17 @@ function sig(kind, payload, btn){
   S.busy = true;
   var el = (typeof btn === 'string') ? $(btn) : btn;
   var was = el && el.innerHTML;
-  if (el){ el.disabled = true; el.innerHTML = ICON.check + ' Sent'; el.className =
-             (el.className || '').replace(' sent','') + ' sent'; }
+  /* PREVIEW FIRST, then stamp. It used to be the other way round: the stamp went on and
+     preview()'s render() tore the node out from under it a line later. Stamping afterwards
+     means it lands on whatever the rebuild produced, and for anything the model already draws
+     as sent it is simply redundant rather than a lie. */
   var undo = preview(kind, payload);
+  el = (typeof btn === 'string') ? $(btn) : el;
+  if (el && document.body.contains(el)){
+    el.disabled = true;
+    el.innerHTML = ICON.check + ' Sent';
+    el.className = (el.className || '').replace(' sent','') + ' sent';
+  }
   api('signal', { token:S.token, key:S.key, kind:kind, payload:payload }).then(function(){
     S.busy = false;
     if (el) el.disabled = false;
@@ -1656,8 +1675,10 @@ function sig(kind, payload, btn){
   })['catch'](function(e){
     S.busy = false;
     undo();
-    if (el){ el.disabled=false; el.innerHTML = was;
-             el.className = (el.className || '').replace(' sent',''); }
+    if (el && document.body.contains(el)){
+      el.disabled=false; el.innerHTML = was;
+      el.className = (el.className || '').replace(' sent','');
+    }
     toast(e.message,'err');
   });
 }
@@ -2264,7 +2285,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'd43537331bb0';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2b9d0e8d9892';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
