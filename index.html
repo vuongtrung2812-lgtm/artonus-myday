@@ -40,7 +40,23 @@
   /* min-height 100% + the ivory on html: without it a short screen (the code entry, an empty
      morning) leaves the page background showing below the content, which reads as a broken
      half-drawn page rather than an app. */
-  html{min-height:100%;-webkit-text-size-adjust:100%}
+  html{min-height:100%;-webkit-text-size-adjust:100%;
+       /* ANDROID CHROME PULL-TO-REFRESH ATE HALF-TYPED NOTES. A drag down anywhere near the
+          top reloads the page, and a technician two sentences into a note about a client's
+          reaction lost both. overscroll-behavior on the BODY alone does not stop it — Chrome
+          reads the property off the viewport-defining element, which is html. */
+       overscroll-behavior-y:contain}
+
+  /* ══ TOUCH ══════════════════════════════════════════════════════════════════════════════
+     A phone has no hover, so a button that only changes on :hover confirms nothing when it is
+     tapped. These four lines are most of the difference between "a website on a phone" and
+     "an app": no 300ms wait for a double-tap that is never coming, no grey flash box, no text
+     selection bubble from a thumb resting a moment too long, and a real press state. */
+  button,.pill,.tag,.c,label{touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none}
+  button:active,.pill:active{transform:scale(.975)}
+  button,.pill{transition:transform .06s ease-out}
+  @media (prefers-reduced-motion:reduce){ button,.pill{transition:none} button:active,.pill:active{transform:none} }
   body{min-height:100vh;min-height:100dvh;
        padding:calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
                calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
@@ -53,8 +69,11 @@
   .hdr h1{font-size:30px;margin-top:6px;letter-spacing:.2px}
   .hdr .sub{font-size:10.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);margin-top:3px;font-weight:800}
   .anav{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:4px 0 12px}
+  /* 44px, because a thumb is not a mouse pointer. These were 33 and the Alerts pill is the
+     one thing on this screen she taps while holding somebody's hand. */
   .pill{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
-    border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:800;color:var(--espresso);cursor:pointer;position:relative}
+    border-radius:999px;padding:0 14px;min-height:44px;font-size:12.5px;font-weight:800;
+    color:var(--espresso);cursor:pointer;position:relative}
   .pill svg{width:14px;height:14px;fill:none;stroke:var(--gold);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .dot{position:absolute;top:-5px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--err);
     color:#fff;font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px}
@@ -802,6 +821,18 @@ function cardHtml(){
 /* THE THREE PHOTOS THAT ARE NOT OPTIONAL. Before proves what she walked in with; After and
    Color are what the next technician needs when she comes back in five weeks. */
 var REQ = ['Before','After','Color'];
+
+/* THE KEYBOARD COVERS THE BOX IT JUST OPENED.
+   iOS scrolls a focused field into view on its own; Android Chrome does it only sometimes,
+   and least reliably in exactly the case that matters — a text box near the bottom of a long
+   card. One beat after the keyboard settles, put the field back on screen. */
+document.addEventListener('focusin', function(e){
+  var el = e.target;
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+  setTimeout(function(){
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {}
+  }, 300);
+});
 
 /* ══ THE PHOTOS ON HER PAST NOTES ══════════════════════════════════════════════════════════
    Same record the front desk sees, from the same store. Kept for as long as this page is
@@ -2118,7 +2149,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'a585b0f7ea4a';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '4ea7265660ea';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
