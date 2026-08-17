@@ -530,8 +530,6 @@ function viewToday(){
         + '</div></div>';
     });
   }
-  h += '<p class="hint" style="margin-top:12px"><b>Only your chair, only today.</b> '
-    + 'There is no search here — the book stays closed except for whoever is in front of you.</p>';
   h += dockHtml();
   $('app').innerHTML = h;
 }
@@ -590,9 +588,6 @@ function viewVisit(){
           + v.addons.map(function(a){ return esc(a.label || a.name); }).join('</b>, <b>')
           + '</b></p>'
         : '')
-    + (v.nameOnly
-        ? '<p class="hint">She came in without a phone number, so nothing can be saved to a '
-          + 'card for her yet — the front desk can add her number at checkout.</p>' : '')
     + '</div>';
 
   h += cardHtml();
@@ -612,9 +607,7 @@ function viewVisit(){
 }
 
 function chairCard(v){
-  var h = '<div class="card"><h3>In the chair</h3>'
-    + '<p class="lede">Tell the front desk anything that changes what she pays or how long '
-    + 'she needs. They see it within seconds.</p>';
+  var h = '<div class="card"><h3>In the chair</h3>';
 
   /* Photos for EVERY visit, including a walk-in who gave no number. techPhoto_ files them
      against the visit key, not against a phone, so hiding these was the UI inventing a limit
@@ -942,8 +935,7 @@ function colorHtml(v){
              types a shade number she may have to go and find, types anything, and a field
              full of guesses is worse than an empty one. Saying why it is worth doing works
              better than making it compulsory. */
-          + '<p class="lede" style="margin:6px 0 0">Not needed to close her out. It is the one '
-          + 'thing she asks for by name when she comes back.</p>');
+          + '<p class="lede" style="margin:6px 0 0">Not needed to close her out.</p>');
 }
 function openColor(){
   $('veil').className = 'veil on';
@@ -1210,7 +1202,7 @@ function openCompose(kind){
   var groups = mk ? all.filter(function(g){ return g.standing; }) : all;
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>'+(mk?'Add a must-know':'Write a note')+'</h3>'
-    + '<p class="lede">'+(mk?'A lasting fact about her care. Everyone sees it on her card, every visit.'
+    + '<p class="lede">'+(mk?'Everyone sees this on her card, every visit.'
         :'What happened today. Care and Manner words stay on her card.')+'</p>'
     + '<div id="cgrid">'+groups.map(function(g){
         return '<div class="lbl">'+esc(g.group)+(g.standing?' · stays on her card':'')+'</div>'
@@ -2118,7 +2110,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '294f1f314011';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '6448bdd91cc2';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
