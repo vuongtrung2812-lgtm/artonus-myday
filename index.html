@@ -509,7 +509,7 @@ function viewToday(){
   h += changesHtml();
   if (!S.visits.length){
     h += '<div class="card"><h3>Nothing in your chair yet</h3>'
-      + '<p class="lede">When the front desk books or walks someone in for you, she appears here.</p></div>';
+      + '<p class="lede">When the front desk books or walks someone in for you, they appear here.</p></div>';
   } else {
     /* Inside the else, not above the guard: "Booked at your chair · 0" over "Nothing in your
        chair yet" is two contradictory sentences. */
@@ -577,7 +577,7 @@ function openVisit(key){
 function viewVisit(){
   var v = S.visit;
   if (!v) { S.view='today'; return render(); }
-  var h = head('Her card');
+  var h = head('Their card');
   h += '<button class="skip" onclick="S.view=\'today\';render()" style="margin-bottom:10px">'
      + ICON.back+' Today</button>';
 
@@ -597,9 +597,9 @@ function viewVisit(){
   h += cardHtml();
 
   if (v.state === 'booked'){
-    h += '<div class="card"><h3>She is not in the chair yet</h3>'
-      + '<p class="lede">Tap when she sits down. The front desk sees it straight away.</p>'
-      + '<button class="btn" id="seat">She is in the chair</button></div>';
+    h += '<div class="card"><h3>They are not in the chair yet</h3>'
+      + '<p class="lede">Tap when they sit down. The front desk sees it straight away.</p>'
+      + '<button class="btn" id="seat">They are in the chair</button></div>';
   } else {
     h += chairCard(v);
   }
@@ -656,7 +656,7 @@ function chairCard(v){
       + '</div>';
 
     var sentCamps = v.campaigns || [];
-    h += '<div class="lbl">She is interested in</div><div class="sigrow">'
+    h += '<div class="lbl">They are interested in</div><div class="sigrow">'
       + ['Rebooking discount','Referral cards'].map(function(n){
           var on = sentCamps.indexOf(n) >= 0;
           return '<button class="sigbtn'+(on?' sent':'')+'"'+(on?' disabled':'')+' data-camp="'+esc(n)+'">'
@@ -665,7 +665,7 @@ function chairCard(v){
   }
 
   if (!v.nameOnly){
-    h += '<div class="lbl">Her book</div><div class="sigrow">'
+    h += '<div class="lbl">Them book</div><div class="sigrow">'
       + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write a note</button>'
       + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star+'Add a must-know</button>'
       + '</div>';
@@ -682,7 +682,7 @@ function chairCard(v){
        is outstanding rather than sitting dead with no explanation. */
     var short = missingBits();
     h += '<button class="btn" id="finish" style="margin-top:14px"'+(short.length?' disabled':'')+'>'
-      + (short.length ? 'Still needed: ' + short.join(', ') : 'She is finished') + '</button>';
+      + (short.length ? 'Still needed: ' + short.join(', ') : 'They are finished') + '</button>';
   }
   return h + '</div>';
 }
@@ -705,7 +705,7 @@ function cardHtml(){
   if (v.nameOnly) return '';
   var c = S.card;
   if (!c) return '<div class="card"><p class="lede">'
-    + (S.cardErr ? esc(S.cardErr) : 'Opening her card&hellip;') + '</p></div>';
+    + (S.cardErr ? esc(S.cardErr) : 'Opening their card&hellip;') + '</p></div>';
 
   var h = '';
   /* WHAT SHE ASKED FOR, first. The alert says this is "on her card" and until now it was
@@ -718,9 +718,9 @@ function cardHtml(){
        to My Day, which holds the Drive permission, and arrive here exactly the way her own
        Before/After photos do. */
     var dshot = (S.thumbs||{}).Design, dhas = !!(((S.card||{}).photos)||{}).Design;
-    h += '<div class="brief">'+ICON.star+'<div><b>The design she wants</b><br>'
+    h += '<div class="brief">'+ICON.star+'<div><b>The design they want</b><br>'
       + (c.brief.text ? esc(c.brief.text)
-                      : '<span class="quiet">No words — she showed a picture.</span>')
+                      : '<span class="quiet">No words — they showed a picture.</span>')
       + (dshot
           ? '<button class="briefshot" data-open="Design" style="background-image:url('+dshot+')">'
             + '<span class="cap">Tap to see it big</span></button>'
@@ -872,7 +872,7 @@ function wireShots(root){
  * A card that has not arrived yet is not the same as a visit with nothing outstanding, so it
  * says so rather than offering a button that would be refused. */
 function missingBits(){
-  if (!S.card) return ['her card to open'];
+  if (!S.card) return ['their card to open'];
   return S.card.missing || [];
 }
 
@@ -957,7 +957,7 @@ function sentBar(v){
    the price comes from the server's copy of the menu — never from this screen. */
 function svcHtml(v){
   if (!can('tech.serviceChange')) return '';
-  return '<div class="lbl">What she is having</div>'
+  return '<div class="lbl">What they are having</div>'
     + '<div class="note" style="margin-bottom:8px"><b>'+esc(v.svc||'—')+'</b>'
     + (v.price?' · '+money(v.price):'')
     + ((v.addons&&v.addons.length)
@@ -1193,23 +1193,23 @@ function openCompose(kind){
   var groups = mk ? all.filter(function(g){ return g.standing; }) : all;
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>'+(mk?'Add a must-know':'Write a note')+'</h3>'
-    + '<p class="lede">'+(mk?'Everyone sees this on her card, every visit.'
-        :'What happened today. Care and Manner words stay on her card.')+'</p>'
+    + '<p class="lede">'+(mk?'Everyone sees this on their card, every visit.'
+        :'What happened today. Care and Manner words stay on their card.')+'</p>'
     + '<div id="cgrid">'+groups.map(function(g){
-        return '<div class="lbl">'+esc(g.group)+(g.standing?' · stays on her card':'')+'</div>'
+        return '<div class="lbl">'+esc(g.group)+(g.standing?' · stays on their card':'')+'</div>'
           + '<div class="sigrow">'+g.items.map(function(t){
               return '<button class="rchip" data-chip="'+esc(t)+'">'+esc(t)+'</button>'; }).join('')+'</div>';
       }).join('')+'</div>'
     + (mk ? '<div class="lbl">What kind of thing is it?</div><div class="sigrow" id="cclass">'
-        + [['allergy','Allergy or reaction'],['care','How to treat her'],['other','Something else']]
+        + [['allergy','Allergy or reaction'],['care','How to treat them'],['other','Something else']]
             .map(function(c, i){
               return '<button class="rchip'+(i===0?' on':'')+'" data-cls="'+c[0]+'">'+esc(c[1])+'</button>';
             }).join('')
         + '</div><p class="hint" style="margin:-4px 0 8px">An allergy is shown in red at the top of '
-        + 'her card, to everyone, every visit.</p>' : '')
+        + 'their card, to everyone, every visit.</p>' : '')
     + '<div class="lbl">'+(mk?'In your words — required':'Anything else')+'</div>'
     + '<textarea class="ta" id="ctext" rows="3" placeholder="'
-    + (mk?'e.g. Reacts to acetone — use the gentle remover':'What she asked for, what worked…')+'"></textarea>'
+    + (mk?'e.g. Reacts to acetone — use the gentle remover':'What they asked for, what worked…')+'"></textarea>'
     + '<p class="hint" style="margin:-4px 0 8px">No phone numbers or emails.</p>'
     + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
     + '<button class="btn" id="csave" style="flex:1" disabled>'+(mk?'Save must-know':'Save note')+'</button></div></div>';
@@ -1253,7 +1253,7 @@ function saveCompose(){
            she wrote arrived as "other" and never showed in red at the top of the card. */
         cls: mk ? (COMP.cls || 'other') : '',
         opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
-    shutVeil(); toast(' Saved to her card.', null, ICON.check);
+    shutVeil(); toast(' Saved to their card.', null, ICON.check);
     return api('techClient', { token:S.token, key:S.key });
   }).then(function(c){ if (c) S.card = c; render(); })
   ['catch'](function(e){ b.disabled=false; b.innerHTML = mk?'Save must-know':'Save note'; toast(e.message,'err'); });
@@ -1274,7 +1274,7 @@ function saveCompose(){
 var WHY = ['Ran past booked time', 'Changed design mid-service', 'Asked for redo',
            'Arrived late', 'Damage to repair'];
 var WRAP = [['Book as usual', 'check'], ['Book extra time', 'clock'],
-            ['Check with her before booking', 'hand']];
+            ['Check with them before booking', 'hand']];
 
 function openRating(){
   var stars = 0, why = {}, wrap = {};
@@ -1306,7 +1306,7 @@ function openRating(){
       + WRAP.map(function(w){ return '<button class="rchip'+(wrap[w[0]]?' on':'')+'" data-wrap="'+esc(w[0])+'">'
           + (ICON[w[1]]||'')+esc(w[0])+'</button>'; }).join('')+'</div>'
       + '<div class="lbl">Your booking tip — optional</div>'
-      + '<textarea class="ta" id="rnote" rows="2" placeholder="e.g. Book her with Chelsea next time."></textarea>'
+      + '<textarea class="ta" id="rnote" rows="2" placeholder="e.g. Book them with Chelsea next time."></textarea>'
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
       + '<button class="btn" id="rsave" style="flex:1"'+(ready()?'':' disabled')+'>Save rating</button></div></div>';
 
@@ -1402,7 +1402,7 @@ function previewLabel(kind, p){
     case 'ADDON':             return String(p.label || p.name || 'Add-on');
     case 'TIER_CHANGE':       return 'Design ' + String(p.to || '');
     case 'CAMPAIGN_INTEREST': return String(p.name || '');
-    case 'SEATED':            return 'She is in the chair';
+    case 'SEATED':            return 'They are in the chair';
     case 'ALMOST_DONE':       return 'Almost finished';
     case 'FINISHED':          return 'Finished';
   }
@@ -1720,9 +1720,9 @@ function evText(e){
                        + (p.toPrice ? ' ' + ba(money(p.fromPrice), money(p.toPrice)) : '');
     /* Print the brief itself. "It is on her card" made her go and look, mid-service, for
        something that could have been in front of her. */
-    case 'DESIGN_BRIEF': return nm+' wants <b>'+esc(p.text||'a design — see her card')+'</b>'
+    case 'DESIGN_BRIEF': return nm+' wants <b>'+esc(p.text||'a design — see their card')+'</b>'
                        + (p.photos ? ' <span class="quiet">('+p.photos+' photo'
-                          +(p.photos>1?'s':'')+' on her card)</span>' : '');
+                          +(p.photos>1?'s':'')+' on their card)</span>' : '');
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
     /* The desk finishing something she asked for. The row carries ids, not words, so the
        words are looked up in the list the poll already handed us — the desk does not repeat
@@ -2101,7 +2101,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '4b8c5b037e23';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2e4dba3bbda1';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
