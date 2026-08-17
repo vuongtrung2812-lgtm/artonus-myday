@@ -771,19 +771,11 @@ function chairCard(v){
       + '</div>';
   }
 
-  if (!v.nameOnly){
-    /* THE PLAIN NOTE IS GONE FROM THIS SCREEN. Trung, 17 August: 'their book section should be
-       removed, because when they finish with the session, and rate the visit, a note would be
-       created. But, I do want the must know feature to be there.'
-
-       He is right — the rating already carries her words for the visit, so writing a note here
-       was a second door to the same row. A must-know is a different thing entirely: it is not
-       about today, it outlives the visit, and it is the one thing she may need to record the
-       moment it happens rather than at the end. */
-    h += '<div class="lbl">Must-know</div><div class="sigrow">'
-      + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star
-      + 'Add a must-know</button></div>';
-  }
+  /* NO MUST-KNOW BUTTON HERE ANY MORE. Trung, 17 August: 'I want the must know to be in the
+     rating, instead of being outside of it.' One moment of record, at the end, holding
+     everything — the stars, the booking tip, the note, the photographs and the must-know. A
+     button she could press at any point in the afternoon was a second commit moment
+     pretending not to be one. */
 
   if (v.state === 'finished'){
     h += (S.card && S.card.rated)
@@ -1386,135 +1378,11 @@ var VOCAB = [
 function vocabGroups(){
   return (S.vocab && S.vocab.length) ? S.vocab : VOCAB;
 }
-var COMP = { kind:'note', picked:{} };
-function openCompose(kind){
-  /* ══ THE SAME COMPOSER THE DESK GOT ═════════════════════════════════════════════════════
-     Trung, 17 August: 'for the write a note and the add a must-know, I think we should do
-     the same as the front desk side.'
-
-     Six groups of chips did two jobs at once here as well — describing the visit AND quietly
-     building the standing card — and a technician with one dry hand was reading a wall of
-     words to find one. What she has is a sentence and a decision about how loudly it should
-     be heard. So: the decision, then the sentence, then the photographs.
-
-     The kind is a toggle inside the sheet, not two different sheets, so changing her mind
-     halfway costs a tap instead of a cancel. */
-  /* Must-know only from the chair now — see the note above the button. The kind stays on COMP
-     because saveCompose still routes on it and the desk composer is unchanged. */
-  COMP = { kind: 'mk', picked: {}, cls: 'other', shots: [] };
-  paintCompose();
-}
-
-function paintCompose(){
-  var mk = COMP.kind === 'mk';
-  $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>Add a must-know</h3>'
-    + '<p class="lede">It stays on their card until somebody takes it off, and every visit '
-    + 'after this one starts with it.</p>'
-    + '<textarea class="ta" id="ctext" rows="4" placeholder="What everyone has to know"'
-    + '>' + esc(COMP.text || '') + '</textarea>'
-    + (mk ? '<button type="button" class="rchip'+(COMP.cls==='allergy'?' on':'')+'" id="callergy" '
-          + 'style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
-          + '<p class="hint" style="margin:-2px 0 var(--s2)">Every technician is asked to tap '
-          + '<b>I&rsquo;ve read this</b>, and the app records who did.'
-          + (COMP.cls==='allergy' ? ' An allergy also shows in red at the top of their card.' : '')
-          + '</p>' : '')
-    + '<div class="lbl">Photos</div>'
-    + '<div class="nshots" id="cshots">' + compShotsHtml() + '</div>'
-    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
-    + '<button class="btn" id="csave" style="flex:1" disabled>Save</button></div></div>';
-
-  /* ONE toggle, not three chips. A must-know either is an allergy or it is not, and the
-     difference is whether it shows in red at the top of the card for ever. Guessing it from
-     the words would be a decision nobody asked me to make. */
-  if ($('callergy')) $('callergy').onclick = function(){
-    COMP.text = ($('ctext') || { value: '' }).value;
-    COMP.cls = COMP.cls === 'allergy' ? 'other' : 'allergy';
-    paintCompose();
-  };
-  wireCompShots();
-  $('ctext').oninput = function(){ COMP.text = $('ctext').value; syncCompose(); };
-  $('csave').onclick = saveCompose;
-  syncCompose();
-}
-
-/* Photographs picked while the note is being written. They go up as she picks them, so Save
-   costs one round trip and not two — the same trade the desk got on 16 August. */
-function compShotsHtml(){
-  return (COMP.shots || []).map(function(x, i){
-    return '<span class="shotwrap' + (x.id ? '' : (x.failed ? ' failed' : ' sending')) + '">'
-         + '<img src="' + (x.data || SHOT_BLANK) + '" alt="for this note">'
-         + (x.id ? '<button class="shotx" data-cdrop="' + i + '">&times;</button>'
-                 : '<em>' + (x.failed ? 'Failed' : 'Adding…') + '</em>')
-         + '</span>';
-  }).join('')
-  + ((COMP.shots || []).length < 6 ? '<button type="button" class="nshot-add" id="cshotadd">+ Photo</button>' : '');
-}
-
-function paintCompShots(){
-  var host = $('cshots');
-  if (!host) return;
-  host.innerHTML = compShotsHtml();
-  wireCompShots();
-  syncCompose();
-}
-
-function wireCompShots(){
-  var host = $('cshots');
-  if (!host) return;
-  Array.prototype.forEach.call(host.querySelectorAll('[data-cdrop]'), function(b){
-    b.onclick = function(){ COMP.shots.splice(+b.getAttribute('data-cdrop'), 1); paintCompShots(); };
-  });
-  var add = $('cshotadd');
-  if (!add) return;
-  add.onclick = function(){
-    var i = document.createElement('input');
-    i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
-    i.onchange = function(){
-      var f = i.files && i.files[0]; if (!f) return;
-      var slot = { data: '', id: '', failed: false };
-      COMP.shots.push(slot);
-      paintCompShots();
-      shrink(f, function(dataUrl){
-        slot.data = dataUrl;
-        paintCompShots();
-        api('techShotStage', { token: S.token, key: S.key, data: dataUrl }).then(function(r){
-          slot.id = (r && r.id) || '';
-          if (!slot.id) slot.failed = true;
-          paintCompShots();
-        })['catch'](function(e){ slot.failed = true; paintCompShots(); toast(e.message, 'err'); });
-      });
-    };
-    i.click();
-  };
-}
-
-function syncCompose(){
-  var txt = (COMP.text || ($('ctext') || { value: '' }).value || '').trim();
-  var flying = (COMP.shots || []).some(function(x){ return !x.id && !x.failed; });
-  /* Words are the note now, so there is nothing to save without them. A photograph still in
-     the air holds Save rather than being silently dropped. */
-  if ($('csave')) $('csave').disabled = !txt || flying;
-}
-
-function saveCompose(){
-  var b = $('csave'); b.disabled = true; b.innerHTML = 'Saving…';
-  var txt = COMP.text || ($('ctext') || { value: '' }).value;
-  var mk = COMP.kind === 'mk';
-  var shots = (COMP.shots || []).map(function(x){ return x.id; }).filter(Boolean);
-  api(mk ? 'techMustKnow' : 'techNote',
-      { token:S.token, key:S.key, chips:[], text:txt,
-        shots: shots,
-        /* cls was never sent, so a technician could not raise an allergy — every must-know
-           she wrote arrived as "other" and never showed in red at the top of the card. It is
-           read off the words now: nobody should have to classify their own sentence. */
-        cls: mk ? (COMP.cls || 'other') : '',
-        opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
-    shutVeil(); toast(' Saved to their card.', null, ICON.check);
-    return api('techClient', { token:S.token, key:S.key });
-  }).then(function(c){ if (c) S.card = c; render(); })
-  ['catch'](function(e){ b.disabled=false; b.innerHTML = 'Save'; toast(e.message,'err'); });
-}
+/* THE SEPARATE COMPOSER IS GONE — its whole job moved into the rating sheet on 17 August.
+   What it used to do, openRating now does in the same breath as the stars: the words, the
+   allergy toggle, and the photographs, all committed at one moment instead of whenever a
+   button happened to be pressed. techNote and techShotStage still exist on the server; the
+   phone no longer calls either. */
 
 /* ── THE RATING — of the VISIT, never of the woman ──────────────────────────
  *
@@ -1534,7 +1402,7 @@ var WHY = ['Ran past booked time', 'Changed design mid-service', 'Asked for redo
 function openRating(){
   /* Held out here because tapping a star repaints the whole sheet, and a technician who typed
      the tip before choosing the stars would otherwise watch her words vanish. */
-  var stars = 0, why = {}, tipsVal = '', noteVal = '';
+  var stars = 0, why = {}, tipsVal = '', noteVal = '', mkVal = '', mkCls = 'other';
 
   function hint(){
     if (!stars) return 'Rate this visit — never the person.';
@@ -1579,6 +1447,21 @@ function openRating(){
       + '<div class="lbl">Note</div>'
       + '<textarea class="ta" id="rnote" rows="2" '
       + 'placeholder="What happened today."' + '>' + esc(noteVal) + '</textarea>'
+      /* The one thing here that outlives the visit. Empty is the ordinary answer — most
+         visits teach the salon nothing it has to carry forward — so it asks quietly and
+         never blocks the save. */
+      + '<div class="lbl">Must-know — only if there is one</div>'
+      + '<textarea class="ta" id="rmk" rows="2" '
+      + 'placeholder="Something every technician has to know, every visit."'
+      + '>' + esc(mkVal) + '</textarea>'
+      + (mkVal.trim()
+          ? '<button type="button" class="rchip' + (mkCls === 'allergy' ? ' on' : '') + '" '
+            + 'id="rmkallergy" style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
+            + '<p class="hint" style="margin:-2px 0 var(--s2)">It stays on their card until '
+            + 'somebody takes it off, and every technician is asked to tap <b>I&rsquo;ve read '
+            + 'this</b>.' + (mkCls === 'allergy' ? ' An allergy also shows in red at the top.' : '')
+            + '</p>'
+          : '')
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
       + '<button class="btn" id="rsave" style="flex:1"'+(ready()?'':' disabled')+'>Save rating</button></div></div>';
 
@@ -1589,19 +1472,37 @@ function openRating(){
       b.onclick = function(){ var w=b.getAttribute('data-why');
         if (why[w]) delete why[w]; else why[w]=true; paint(); };
     });
-    ['rtips','rnote'].forEach(function(id){
+    ['rtips','rnote','rmk'].forEach(function(id){
       var t = $(id); if (!t) return;
       t.oninput = function(){
-        if (id === 'rtips') tipsVal = t.value; else noteVal = t.value;
+        if (id === 'rtips') tipsVal = t.value;
+        else if (id === 'rnote') noteVal = t.value;
+        else {
+          var had = mkVal.trim().length > 0;
+          mkVal = t.value;
+          /* The allergy toggle appears with the first character and goes with the last, so
+             repaint only on that edge — never on every keystroke, which would steal focus. */
+          if (had !== (mkVal.trim().length > 0)) { paint(); $('rmk').focus(); return; }
+        }
         var b = $('rsave'); if (b) b.disabled = !ready();
       };
     });
+    if ($('rmkallergy')) $('rmkallergy').onclick = function(){
+      mkCls = mkCls === 'allergy' ? 'other' : 'allergy';
+      paint(); $('rmk').focus();
+    };
     if ($('rsave')) $('rsave').onclick = function(){
       var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
       api('techRating', { token:S.token, key:S.key, stars:stars,
                           why: Object.keys(why),
                           tips: ($('rtips')||{value:''}).value,
-                          note: ($('rnote')||{value:''}).value }).then(function(){
+                          note: ($('rnote')||{value:''}).value,
+                          mustKnow: ($('rmk')||{value:''}).value,
+                          mkCls: mkCls }).then(function(r){
+        /* The rating saved even if the flag did not — say which, rather than a blanket
+           "saved" over a must-know that never landed. */
+        if (r && r.mustKnowError) toast('Rating saved. The must-know did not: '
+                                        + r.mustKnowError, 'err');
         shutVeil(); toast(' Saved. Thank you.', null, ICON.check);
         /* Re-pull the card, not just the day: without this her own rating is invisible until
            she leaves the screen and comes back, which reads as "it did not save". */
@@ -2363,7 +2264,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'd23ef46836ae';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'd43537331bb0';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
