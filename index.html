@@ -513,6 +513,10 @@ function api(name, payload){
     /* Named for what she should DO about it. 'AbortError' is not a sentence. */
     if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))
       throw new Error('That took too long. Press send again — it will not go twice.');
+    /* The server refusing a duplicate is not a failure SHE has to fix — the desk already has
+       it. Telling her it went wrong would invite the very retry the refusal just prevented. */
+    if (e && /still sending/i.test(String(e.message || '')))
+      throw new Error('Still sending — give it a moment. Nothing is lost.');
     if (e && e.message) throw e;
     throw new Error('No connection. Check the wifi and try again.');
   });
@@ -1146,13 +1150,17 @@ function withMenu(then){
 var SVC_OP = '';
 function openSvc(){
   var picked = '';
+  var GEN = ++SHEET_GEN;                            // see openAddon
+  var mine = function(){ return GEN === SHEET_GEN; };
   var sending = false;                              // see openAddon — a repaint must not unlock
   SVC_OP = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
     + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
     + '<div id="svclist" class="picklist"><p class="lede">Loading the menu&hellip;</p></div>'
-    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
+    /* CANCEL LOCKS TOO. Leaving it live during a send is how the sheet got torn down from
+       under a request that was still in the air. */
+    + '<div class="row2"><button class="skip" id="svccancel" style="flex:1">Cancel</button>'
     + '<button class="btn" id="svcgo" style="flex:1" disabled>Send</button></div></div>';
   withMenu(function(m){
     function paint(){
@@ -1178,6 +1186,9 @@ function openSvc(){
         };
       });
       var go = $('svcgo');
+      if (!go || !$('svclist')) return;              // the sheet is gone; nothing to draw on
+      var cx = $('svccancel');
+      if (cx){ cx.disabled = sending; cx.onclick = function(){ if (!sending) shutVeil(); }; }
       go.disabled = sending || !picked;
       go.innerHTML = sending ? 'Sending&hellip;'
                              : (picked ? 'Send &mdash; ' + esc(picked) : 'Send');
@@ -1192,15 +1203,30 @@ function openSvc(){
       if (!SVC_OP) SVC_OP = opId('svc');
       api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to },
                       opId: SVC_OP })
-        .then(function(){ sending = false; SVC_OP = ''; shutVeil();
-                          toast('The desk has it — '+to); refresh(true); })
-        ['catch'](function(e){ sending = false; paint(); toast(e.message,'err'); });
+        .then(function(){ sending = false; SVC_OP = '';
+                          if (!mine()) return void toast('The desk has it — '+to);
+                          shutVeil(); toast('The desk has it — '+to); refresh(true); })
+        ['catch'](function(e){ sending = false; toast(e.message,'err'); if (mine()) paint(); });
     };
   });
 }
+/**
+ * WHICH SHEET IS ON SCREEN.
+ *
+ * The `sending` flag is a closure variable, but the sheet it guards is addressed by GLOBAL
+ * element id. Press Send, press Cancel, reopen and pick again, and when the FIRST request
+ * finally settles it operates on the SECOND sheet: the success branch calls shutVeil() and
+ * closes the one being filled in right now, and the failure branch repaints the old
+ * selection over the new one and rebinds every chip to a dead closure.
+ *
+ * A generation number makes a stale answer inert instead of destructive.
+ */
+var SHEET_GEN = 0;
 var ADD_OP = '';
 function openAddon(){
   var picked = {};
+  var GEN = ++SHEET_GEN;
+  var mine = function(){ return GEN === SHEET_GEN; };
   /* ONE SEND AT A TIME. Trung, 17 August: 'I can still spam, when its sending, I can just
      select something else and send again.'
 
@@ -1213,7 +1239,9 @@ function openAddon(){
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
     + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
-    + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
+    /* CANCEL LOCKS TOO. Leaving it live during a send is how the sheet got torn down from
+       under a request that was still in the air. */
+    + '<div class="row2"><button class="skip" id="addcancel" style="flex:1">Cancel</button>'
     + '<button class="btn" id="addgo" style="flex:1" disabled>Send</button></div></div>';
   withMenu(function(m){
     /* Only this chair's family. All seven used to be offered everywhere, told apart by
@@ -1266,6 +1294,9 @@ function openAddon(){
         };
       });
 
+      if (!$('addlist') || !$('addgo')) return;      // the sheet is gone; nothing to draw on
+      var cx = $('addcancel');
+      if (cx){ cx.disabled = sending; cx.onclick = function(){ if (!sending) shutVeil(); }; }
       var names = Object.keys(picked), go = $('addgo');
       /* The in-flight state is drawn from the flag, so it SURVIVES a repaint. */
       go.disabled = sending || !names.length;
@@ -1290,6 +1321,9 @@ function openAddon(){
                          return { kind:'ADDON', payload:{ name:n, qty:picked[n] } }; }) })
         .then(function(){
           sending = false; ADD_OP = '';
+          /* Landed after she moved on. Say what happened; do not touch the screen. */
+          if (!mine()) return void toast(names.length === 1 ? 'Added — the desk has it'
+                                                           : 'Added ' + names.length + ' — the desk has them');
           shutVeil();
           toast(names.length === 1 ? 'Added — the desk has it'
                                    : 'Added ' + names.length + ' — the desk has them');
@@ -1299,8 +1333,12 @@ function openAddon(){
           /* ADD_OP is deliberately KEPT. Pressing send again reuses it, so if the first
              attempt actually landed the server answers from memory instead of writing a
              second copy — the whole reason the timeout above is safe. */
-          sending = false; paint();
+          sending = false;
+          /* TOAST FIRST. paint() used to run before it and throw on a $('addlist') that no
+             longer existed — inside the catch — so a timeout produced no message at all,
+             which is the precise silence that produced the double-send. */
           toast(e.message, 'err');
+          if (mine()) paint();
         });
     };
   });
@@ -2453,7 +2491,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2aa55c331dc4';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'a5549a82d61b';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
