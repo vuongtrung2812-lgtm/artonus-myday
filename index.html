@@ -411,7 +411,7 @@ var ICON = {
 };
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
-var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{},
+var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{}, mtDraft:'',
           key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
@@ -679,12 +679,25 @@ function viewToday(){
  */
 function ackFlag(id, btn){
   if (btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  /* THE ONE THING THAT CHANGED IS THIS FLAG. It used to call openVisit(), which sets S.card
+     to null and re-reads the whole card — so reading a must-know blanked the screen for a
+     full round trip and threw away anything else on it, including photographs just taken.
+     Set the fact locally, draw it, and let the ordinary poll agree in its own time. */
+  var f = ((S.card && S.card.flags) || []).filter(function(x){ return x.id === id; })[0];
+  if (f){
+    f.readByMe = true;
+    f.readBy = (f.readBy || []).concat(f.readBy && f.readBy.indexOf(S.tech) >= 0 ? [] : [S.tech]);
+    render();
+  }
   api('techAck', { token: S.token, key: S.key, id: id })
     .then(function(){
       toast(' Thank you — that is written down.', null, ICON.check);
-      openVisit(S.key);          /* re-reads the card, so the row flips to "You have read this" */
     })
     ['catch'](function(e){
+      /* It did not land, so it must stop saying it did. */
+      if (f){ f.readByMe = false;
+              f.readBy = (f.readBy || []).filter(function(w){ return w !== S.tech; });
+              render(); }
       if (btn){ btn.disabled = false; btn.textContent = 'I read this'; }
       toast(e.message, 'err');
     });
@@ -696,7 +709,7 @@ function openVisit(key){
   S.visit = S.visits.filter(function(v){ return v.key===key; })[0] || null;
   /* S.missing belongs to ONE visit. Left behind it would tell the next client's screen that
      her photographs were already taken. */
-  S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; S.view = 'visit';
+  S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; S.mtDraft = ''; S.view = 'visit';
   render();
   /* Her card is a second read on purpose: the day list must paint instantly, and the card is
      the expensive part. A walk-in with no number has no card at all, and says so. */
@@ -783,9 +796,20 @@ function chairCard(v){
         return '<button class="sigbtn'+(on?' sent':'')+'" data-mt="'+m+'">'
           + (on?ICON.check:ICON.clock)+'+'+m+' min</button>'; }).join('')
     + '</div>'
+    /* THE TYPED NUMBER LIVES IN THE MODEL. This input carried no value attribute at all, so
+       every rebuild emitted an empty box — and preview()'s render() runs SYNCHRONOUSLY inside
+       the press, which means pressing Send wiped the field itself, before any poll. Press
+       again, as anyone would when a button does nothing, and it read the empty box, made it
+       0, and answered 'Between 5 and 120 minutes' in red for a send that had SUCCEEDED. */
     + '<div class="row2"><input class="in mtnum" id="mtnum" type="text" inputmode="numeric" '
-    + 'pattern="[0-9]*" placeholder="Or type the minutes" style="margin:0">'
-    + '<button class="skip" id="mtgo">'+ICON.clock+' Send</button></div>';
+    + 'pattern="[0-9]*" placeholder="Or type the minutes" style="margin:0" value="'
+    + esc(S.mtDraft || '') + '">'
+    /* And the confirmation goes on the control she pressed. A typed 45 lights no chip, so the
+       note above the box was the only sign anything happened — two rows up, past a keyboard. */
+    + '<button class="skip" id="mtgo">'
+    + (Number(v.moreTime) > 0 && [10,15,30].indexOf(Number(v.moreTime)) < 0
+        ? ICON.check + ' Sent +' + v.moreTime
+        : ICON.clock + ' Send') + '</button></div>';
 
   /* Derived from the visit, not stamped on the button — the poll re-renders a second later
      and a stamped tick died with it, which reads as "it did not send". */
@@ -996,13 +1020,35 @@ function wireShots(root){
       })['catch'](function(){ SHOT_BUSY[id] = false; });
     }
     img.onclick = function(){
-      if (!SHOT_CACHE[id]) return;
-      $('veil').className = 'veil on';
-      $('veil').innerHTML = '<div class="alert" style="max-width:none;width:100%;background:none;'
-        + 'box-shadow:none;padding:0;text-align:center">'
-        + '<img src="'+SHOT_CACHE[id]+'" alt="from that visit" style="max-width:100%;max-height:70vh;'
-        + 'border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'
-        + '<button class="btn" style="margin-top:14px" onclick="shutVeil()">Close</button></div>';
+      /* IT USED TO DO NOTHING AT ALL while the bytes were still coming, which is precisely
+         when somebody taps it — the tile is on screen and looks ready. Open the viewer either
+         way and fill it when the photograph lands. */
+      var frame = function(inner){
+        $('veil').className = 'veil on';
+        $('veil').innerHTML = '<div class="alert" style="max-width:none;width:100%;background:none;'
+          + 'box-shadow:none;padding:0;text-align:center">' + inner
+          + '<button class="btn" style="margin-top:14px" onclick="shutVeil()">Close</button></div>';
+      };
+      var pic = function(src){
+        return '<img id="shotbig" src="'+src+'" alt="from that visit" style="max-width:100%;'
+             + 'max-height:70vh;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">';
+      };
+      if (SHOT_CACHE[id]) return frame(pic(SHOT_CACHE[id]));
+      frame('<p class="lede" style="color:#fff">Opening&hellip;</p>');
+      if (SHOT_BUSY[id]) return;                  // already on its way; the fill below catches it
+      SHOT_BUSY[id] = true;
+      api('techShot', { token: S.token, id: id }).then(function(r){
+        SHOT_BUSY[id] = false;
+        if (!r || !r.data) throw new Error('That photo would not open.');
+        SHOT_CACHE[id] = r.data;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-shot="'+id+'"]'),
+          function(t){ t.src = r.data; t.className = ''; });
+        if ($('veil').className.indexOf('on') >= 0) frame(pic(r.data));
+      })['catch'](function(e){
+        SHOT_BUSY[id] = false;
+        if ($('veil').className.indexOf('on') >= 0)
+          frame('<p class="lede" style="color:#fff">'+esc(e.message)+'</p>');
+      });
     };
   });
   Array.prototype.forEach.call(root.querySelectorAll('[data-addshot]'), function(b){
@@ -1613,12 +1659,16 @@ function openRating(){
     return stars >= 4 ? 'Good visit — anything worth saying for next time?'
                       : 'Say what happened, so the next person can act on it.';
   }
-  function ready(){
-    var needWhy = stars > 0 && stars <= 3;
-    var told = (($('rtips') || { value: '' }).value.trim().length > 0)
-            || (($('rnote') || { value: '' }).value.trim().length > 0);
-    return stars > 0 && told && (!needWhy || Object.keys(why).length > 0);
+  /* WHAT IS STILL MISSING, in words. The button used to sit dead and say nothing, so the one
+     thing it wanted was the one thing she could not find out — the same failure the Finish
+     button was fixed for, which prints 'Still needed: …' rather than greying out in silence. */
+  function wants(){
+    if (!stars) return 'Pick the stars first.';
+    if (stars <= 3 && !Object.keys(why).length)
+      return 'Three stars or fewer needs a reason — pick at least one.';
+    return '';
   }
+  function ready(){ return !wants(); }
 
   function paint(){
     $('veil').innerHTML = '<div class="alert"><h3>How was the visit?</h3>'
@@ -1667,7 +1717,8 @@ function openRating(){
             + '</p>'
           : '')
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
-      + '<button class="btn" id="rsave" style="flex:1"'+(ready()?'':' disabled')+'>Save rating</button></div></div>';
+      /* LIVE, ALWAYS. A disabled button cannot tell her what it wants; pressing it now says so. */
+      + '<button class="btn" id="rsave" style="flex:1">Save rating</button></div></div>';
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-star]'), function(b){
       b.onclick = function(){ stars = Number(b.getAttribute('data-star')); why = {}; paint(); };
@@ -1688,7 +1739,6 @@ function openRating(){
              repaint only on that edge — never on every keystroke, which would steal focus. */
           if (had !== (mkVal.trim().length > 0)) { paint(); $('rmk').focus(); return; }
         }
-        var b = $('rsave'); if (b) b.disabled = !ready();
       };
     });
     if ($('rmkallergy')) $('rmkallergy').onclick = function(){
@@ -1696,6 +1746,8 @@ function openRating(){
       paint(); $('rmk').focus();
     };
     if ($('rsave')) $('rsave').onclick = function(){
+      var missing = wants();
+      if (missing) return toast(missing, 'err');
       var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
       api('techRating', { token:S.token, key:S.key, stars:stars,
                           why: Object.keys(why),
@@ -1724,10 +1776,21 @@ function wireChair(v){
     b.onclick = function(){ sig('MORE_TIME', { mins:Number(b.getAttribute('data-mt')) }, b); };
   });
   function sendTyped(){
-    var n = Number(($('mtnum').value||'').replace(/\D/g,''));
+    var n = Number((S.mtDraft || ($('mtnum')||{value:''}).value || '').replace(/\D/g,''));
     if (!(n>=5 && n<=120)){ toast('Between 5 and 120 minutes.','err'); return; }
+    /* Cleared BEFORE the send, because the preview redraws the box a line later and the
+       number is now shown on the button instead. The NODE is cleared too: paintInto carries
+       typed values across a rebuild, which is right everywhere else and would otherwise put
+       this one straight back. */
+    S.mtDraft = '';
+    if ($('mtnum')) $('mtnum').value = '';
     sig('MORE_TIME', { mins:n }, $('mtgo'));
   }
+  if ($('mtnum')) $('mtnum').oninput = function(){
+    /* Held so a rebuild — a poll, a doorbell, or the press itself — hands it back. */
+    S.mtDraft = this.value.replace(/\D/g,'').slice(0,3);
+    if (this.value !== S.mtDraft) this.value = S.mtDraft;
+  };
   if ($('mtgo')) $('mtgo').onclick = sendTyped;
   /* Enter sends. She has one dry hand and the button is the width of a thumb away. */
   if ($('mtnum')) $('mtnum').onkeydown = function(e){ if (e.key === 'Enter'){ e.preventDefault(); sendTyped(); } };
@@ -1796,8 +1859,20 @@ function pendLabel(p){ return previewLabel(p.kind, p.payload); }
 
 /** Is the server now telling us about this ask itself? */
 function pendSettled(v, p){
+  /* IT HAS TO HAVE HAPPENED AFTER THE PRESS. This matched on kind + words alone, against a
+     list that is the visit's WHOLE history — so asking +10, then +15, then +10 again found
+     the first +10 still sitting there, called the third press settled, and dropped its guess
+     on the very next poll. The chip went green and then un-greened itself, which is the exact
+     thing that makes somebody press again.
+
+     A second of slack: the server stamps whole seconds and a press is timed by the phone's
+     clock, so an exact comparison would sometimes miss by a hair and hold a guess for the
+     full minute instead. */
   return (v.sent || []).some(function(x){
-    return x.kind === p.kind && x.label === pendLabel(p) && x.id !== 'pending';
+    if (x.kind !== p.kind || x.id === 'pending') return false;
+    if (x.label !== pendLabel(p)) return false;
+    if (!x.atMs) return true;                     // an older server that does not say when
+    return x.atMs >= (p.at - 1000);
   });
 }
 
@@ -2088,6 +2163,13 @@ function applyHelpPending(){
   if (HELP_PEND.want === 'open'){
     if (S.help){ HELP_PEND = null; return; }        // the server is showing it now
     S.help = HELP_PEND.help;
+  } else if (HELP_PEND.want === 'reason'){
+    /* CHANGING WHAT SHE NEEDS was painted straight onto S.help, which the next poll replaces
+       wholesale — so the new reason showed for a second or two and then reverted to the old
+       one, which reads as "it did not send" about the one thing she went back to correct. */
+    if (!S.help){ HELP_PEND = null; return; }
+    if (S.help.reason === HELP_PEND.reason){ HELP_PEND = null; return; }
+    S.help.reason = HELP_PEND.reason;
   } else {
     if (!S.help){ HELP_PEND = null; return; }       // the server has let it go
     S.help = null;
@@ -2127,10 +2209,14 @@ function changeHelpWhy(btn){
   var reason = HELP_PICK && text ? HELP_PICK + ' — ' + text : (HELP_PICK || text);
   var was = S.help && S.help.reason;
   if (S.help) S.help.reason = reason;              // she sees her own words at once
+  /* And it is laid back on top of every poll until the server agrees, the same way the raised
+     hand itself is. Writing it onto S.help alone lasted exactly one poll. */
+  HELP_PEND = { want:'reason', reason: reason, at: Date.now() };
   shutVeil(); render();
   api('helpReason', { token:S.token, reason:HELP_PICK, text:text }).then(function(){
     pollHot();
   })['catch'](function(e){
+    HELP_PEND = null;
     if (S.help) S.help.reason = was; render();
     toast(e.message,'err');
   });
@@ -2549,7 +2635,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '9bc789a74989';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'a698278172d4';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
