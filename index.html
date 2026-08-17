@@ -148,6 +148,15 @@
   /* The end of the visit, kept together and set apart, so the middle of the screen is not
      carrying it all appointment long. A hairline, not another card — it is still the same
      card, just a later part of it. */
+  /* Two kinds, side by side, one always chosen — the same control the desk got. */
+  .kindpick{display:grid;grid-template-columns:1fr 1fr;gap:var(--s1);margin:var(--s2) 0 var(--s2)}
+  .kind{text-align:left;padding:11px 12px;border-radius:14px;border:1.5px solid var(--line);
+    background:var(--card);font-family:inherit}
+  .kind b{display:block;font-size:14px;font-weight:900;color:var(--espresso)}
+  .kind small{display:block;margin-top:2px;font-size:11px;font-weight:700;color:var(--muted);line-height:1.35}
+  .kind.on{border-color:var(--gold);background:var(--gold-soft)}
+  .kind.warn.on{border-color:var(--err);background:var(--err-soft)}
+  .kind.warn.on b{color:var(--err)}
   .endblk{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
   .endhd{font-family:'Cormorant Garamond',Georgia,serif;font-size:19px;font-weight:700;
     color:var(--espresso);margin-bottom:var(--s1)}
@@ -765,9 +774,10 @@ function chairCard(v){
   }
 
   if (!v.nameOnly){
+    /* ONE door, like the desk. The kind is chosen inside, where changing her mind costs a tap
+       rather than a cancel and a second decision about which button to press. */
     h += '<div class="lbl">Their book</div><div class="sigrow">'
-      + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write a note</button>'
-      + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star+'Add a must-know</button>'
+      + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write in their book</button>'
       + '</div>';
   }
 
@@ -1304,76 +1314,145 @@ function vocabGroups(){
 }
 var COMP = { kind:'note', picked:{} };
 function openCompose(kind){
-  COMP = { kind:kind, picked:{} };
-  var mk = kind==='mk';
-  var all = vocabGroups();
-  var groups = mk ? all.filter(function(g){ return g.standing; }) : all;
+  /* ══ THE SAME COMPOSER THE DESK GOT ═════════════════════════════════════════════════════
+     Trung, 17 August: 'for the write a note and the add a must-know, I think we should do
+     the same as the front desk side.'
+
+     Six groups of chips did two jobs at once here as well — describing the visit AND quietly
+     building the standing card — and a technician with one dry hand was reading a wall of
+     words to find one. What she has is a sentence and a decision about how loudly it should
+     be heard. So: the decision, then the sentence, then the photographs.
+
+     The kind is a toggle inside the sheet, not two different sheets, so changing her mind
+     halfway costs a tap instead of a cancel. */
+  COMP = { kind: kind === 'mk' ? 'mk' : 'note', picked: {}, cls: 'other', shots: [] };
+  paintCompose();
+}
+
+function paintCompose(){
+  var mk = COMP.kind === 'mk';
   $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>'+(mk?'Add a must-know':'Write a note')+'</h3>'
-    + '<p class="lede">'+(mk?'Everyone sees this on their card, every visit.'
-        :'What happened today. Care and Manner words stay on their card.')+'</p>'
-    + '<div id="cgrid">'+groups.map(function(g){
-        return '<div class="lbl">'+esc(g.group)+(g.standing?' · stays on their card':'')+'</div>'
-          + '<div class="sigrow">'+g.items.map(function(t){
-              return '<button class="rchip" data-chip="'+esc(t)+'">'+esc(t)+'</button>'; }).join('')+'</div>';
-      }).join('')+'</div>'
-    + (mk ? '<div class="lbl">What kind of thing is it?</div><div class="sigrow" id="cclass">'
-        + [['allergy','Allergy or reaction'],['care','How to treat them'],['other','Something else']]
-            .map(function(c, i){
-              return '<button class="rchip'+(i===0?' on':'')+'" data-cls="'+c[0]+'">'+esc(c[1])+'</button>';
-            }).join('')
-        + '</div><p class="hint" style="margin:-4px 0 8px">An allergy is shown in red at the top of '
-        + 'their card, to everyone, every visit.</p>' : '')
-    + '<div class="lbl">'+(mk?'In your words — required':'Anything else')+'</div>'
-    + '<textarea class="ta" id="ctext" rows="3" placeholder="'
-    + (mk?'e.g. Reacts to acetone — use the gentle remover':'What they asked for, what worked…')+'"></textarea>'
-    + '<p class="hint" style="margin:-4px 0 8px">No phone numbers or emails.</p>'
+  $('veil').innerHTML = '<div class="alert"><h3>Their book</h3>'
+    + '<div class="kindpick">'
+    + '<button type="button" class="kind'+(mk?'':' on')+'" data-ckind="note">'
+    + '<b>Note</b><small>What happened today</small></button>'
+    + '<button type="button" class="kind warn'+(mk?' on':'')+'" data-ckind="mk">'
+    + '<b>Must-know</b><small>Stays on their card until it is taken off</small></button>'
+    + '</div>'
+    + '<textarea class="ta" id="ctext" rows="4" placeholder="'
+    + (mk ? 'What everyone has to know' : 'What happened — in your own words')
+    + '">' + esc(COMP.text || '') + '</textarea>'
+    + (mk ? '<button type="button" class="rchip'+(COMP.cls==='allergy'?' on':'')+'" id="callergy" '
+          + 'style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
+          + '<p class="hint" style="margin:-2px 0 var(--s2)">Every technician is asked to tap '
+          + '<b>I&rsquo;ve read this</b>, and the app records who did.'
+          + (COMP.cls==='allergy' ? ' An allergy also shows in red at the top of their card.' : '')
+          + '</p>' : '')
+    + '<div class="lbl">Photos</div>'
+    + '<div class="nshots" id="cshots">' + compShotsHtml() + '</div>'
     + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
-    + '<button class="btn" id="csave" style="flex:1" disabled>'+(mk?'Save must-know':'Save note')+'</button></div></div>';
-  Array.prototype.forEach.call(document.querySelectorAll('[data-chip]'), function(b){
+    + '<button class="btn" id="csave" style="flex:1" disabled>Save</button></div></div>';
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ckind]'), function(b){
     b.onclick = function(){
-      var t = b.getAttribute('data-chip');
-      if (COMP.picked[t]) delete COMP.picked[t]; else COMP.picked[t] = true;
-      b.className = 'rchip' + (COMP.picked[t] ? ' on' : '');
-      syncCompose();
+      var want = b.getAttribute('data-ckind') === 'mk';
+      if (want === (COMP.kind === 'mk')) return;
+      /* Keep what she has already typed. Changing the kind is not starting again. */
+      COMP.text = ($('ctext') || { value: '' }).value;
+      COMP.kind = want ? 'mk' : 'note';
+      paintCompose();
     };
   });
-  /* The class chips are single-choice — a thing is an allergy or it is not. */
-  if ($('cclass')){
-    COMP.cls = 'allergy';
-    Array.prototype.forEach.call($('cclass').querySelectorAll('[data-cls]'), function(b){
-      b.onclick = function(){
-        COMP.cls = b.getAttribute('data-cls');
-        Array.prototype.forEach.call($('cclass').querySelectorAll('[data-cls]'), function(o){
-          o.className = 'rchip' + (o === b ? ' on' : '');
-        });
-      };
-    });
-  }
-  $('ctext').oninput = syncCompose;
+  /* ONE toggle, not three chips. A must-know either is an allergy or it is not, and the
+     difference is whether it shows in red at the top of the card for ever. Guessing it from
+     the words would be a decision nobody asked me to make. */
+  if ($('callergy')) $('callergy').onclick = function(){
+    COMP.text = ($('ctext') || { value: '' }).value;
+    COMP.cls = COMP.cls === 'allergy' ? 'other' : 'allergy';
+    paintCompose();
+  };
+  wireCompShots();
+  $('ctext').oninput = function(){ COMP.text = $('ctext').value; syncCompose(); };
   $('csave').onclick = saveCompose;
   syncCompose();
 }
-function syncCompose(){
-  var txt = ($('ctext')||{value:''}).value.trim();
-  var n = Object.keys(COMP.picked).length;
-  /* A must-know with no words is a chip nobody can act on. A note can be chips alone. */
-  $('csave').disabled = COMP.kind==='mk' ? !txt : !(n || txt);
+
+/* Photographs picked while the note is being written. They go up as she picks them, so Save
+   costs one round trip and not two — the same trade the desk got on 16 August. */
+function compShotsHtml(){
+  return (COMP.shots || []).map(function(x, i){
+    return '<span class="shotwrap' + (x.id ? '' : (x.failed ? ' failed' : ' sending')) + '">'
+         + '<img src="' + (x.data || SHOT_BLANK) + '" alt="for this note">'
+         + (x.id ? '<button class="shotx" data-cdrop="' + i + '">&times;</button>'
+                 : '<em>' + (x.failed ? 'Failed' : 'Adding…') + '</em>')
+         + '</span>';
+  }).join('')
+  + ((COMP.shots || []).length < 6 ? '<button type="button" class="nshot-add" id="cshotadd">+ Photo</button>' : '');
 }
+
+function paintCompShots(){
+  var host = $('cshots');
+  if (!host) return;
+  host.innerHTML = compShotsHtml();
+  wireCompShots();
+  syncCompose();
+}
+
+function wireCompShots(){
+  var host = $('cshots');
+  if (!host) return;
+  Array.prototype.forEach.call(host.querySelectorAll('[data-cdrop]'), function(b){
+    b.onclick = function(){ COMP.shots.splice(+b.getAttribute('data-cdrop'), 1); paintCompShots(); };
+  });
+  var add = $('cshotadd');
+  if (!add) return;
+  add.onclick = function(){
+    var i = document.createElement('input');
+    i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
+    i.onchange = function(){
+      var f = i.files && i.files[0]; if (!f) return;
+      var slot = { data: '', id: '', failed: false };
+      COMP.shots.push(slot);
+      paintCompShots();
+      shrink(f, function(dataUrl){
+        slot.data = dataUrl;
+        paintCompShots();
+        api('techShotStage', { token: S.token, key: S.key, data: dataUrl }).then(function(r){
+          slot.id = (r && r.id) || '';
+          if (!slot.id) slot.failed = true;
+          paintCompShots();
+        })['catch'](function(e){ slot.failed = true; paintCompShots(); toast(e.message, 'err'); });
+      });
+    };
+    i.click();
+  };
+}
+
+function syncCompose(){
+  var txt = (COMP.text || ($('ctext') || { value: '' }).value || '').trim();
+  var flying = (COMP.shots || []).some(function(x){ return !x.id && !x.failed; });
+  /* Words are the note now, so there is nothing to save without them. A photograph still in
+     the air holds Save rather than being silently dropped. */
+  if ($('csave')) $('csave').disabled = !txt || flying;
+}
+
 function saveCompose(){
   var b = $('csave'); b.disabled = true; b.innerHTML = 'Saving…';
-  var txt = ($('ctext')||{value:''}).value, chips = Object.keys(COMP.picked);
-  var mk = COMP.kind==='mk';
-  api(mk?'techMustKnow':'techNote',
-      { token:S.token, key:S.key, chips:chips, text:txt,
+  var txt = COMP.text || ($('ctext') || { value: '' }).value;
+  var mk = COMP.kind === 'mk';
+  var shots = (COMP.shots || []).map(function(x){ return x.id; }).filter(Boolean);
+  api(mk ? 'techMustKnow' : 'techNote',
+      { token:S.token, key:S.key, chips:[], text:txt,
+        shots: shots,
         /* cls was never sent, so a technician could not raise an allergy — every must-know
-           she wrote arrived as "other" and never showed in red at the top of the card. */
+           she wrote arrived as "other" and never showed in red at the top of the card. It is
+           read off the words now: nobody should have to classify their own sentence. */
         cls: mk ? (COMP.cls || 'other') : '',
         opId: (mk?'mk-':'nt-') + S.key + '-' + Date.now() }).then(function(){
     shutVeil(); toast(' Saved to their card.', null, ICON.check);
     return api('techClient', { token:S.token, key:S.key });
   }).then(function(c){ if (c) S.card = c; render(); })
-  ['catch'](function(e){ b.disabled=false; b.innerHTML = mk?'Save must-know':'Save note'; toast(e.message,'err'); });
+  ['catch'](function(e){ b.disabled=false; b.innerHTML = 'Save'; toast(e.message,'err'); });
 }
 
 /* ── THE RATING — of the VISIT, never of the woman ──────────────────────────
@@ -2215,7 +2294,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '3212c72195fa';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '913fa9b15325';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
