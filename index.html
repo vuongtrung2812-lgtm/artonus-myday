@@ -227,6 +227,12 @@
     padding:12px 13px;margin-bottom:var(--s2);font-size:13.5px}
   .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
   /* The photographs on a past note — the same record the front desk sees. */
+  /* An instruction for whoever books them next, not a record of a day that is over. */
+  .tip{display:flex;gap:7px;align-items:flex-start;margin-top:var(--s2);padding:8px 10px;
+    background:var(--gold-soft);border:1px solid var(--gold);border-radius:10px;
+    font-size:13px;font-weight:700;color:var(--espresso);line-height:1.4}
+  .tip svg{width:14px;height:14px;stroke:var(--gold);fill:none;stroke-width:2;
+    stroke-linecap:round;flex:none;margin-top:2px}
   .nshots{display:flex;gap:var(--s1);margin-top:var(--s2);flex-wrap:wrap}
   .nshots img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);
     background:var(--line)}
@@ -885,6 +891,7 @@ function cardHtml(){
              later the shade may be discontinued, renamed, or simply written down wrong, and
              the picture is still exactly right. Blank tiles first, filled as they arrive. */
           + '<div class="nshots">'
+          + (n.tips ? '<div class="tip">'+ICON.clock+'<span>'+esc(n.tips)+'</span></div>' : '')
           + (n.shots||[]).concat(SHOT_PEND[n.id]||[]).map(function(id){
               return '<img class="'+(SHOT_CACHE[id]?'':'wait')+'" data-shot="'+esc(id)
                    + '" alt="from that visit" src="'+(SHOT_CACHE[id]||SHOT_BLANK)+'">'; }).join('')
@@ -1518,25 +1525,26 @@ function saveCompose(){
  * named woman's phone number, where they outlive everyone's memory of the day.
  *
  * These reasons describe what HAPPENED, which is the only thing the next technician can act
- * on. And the booking chips below are the point of the whole screen: a star with no
- * instruction is a grudge, a star with "book extra time" is a salon that runs better.
+ * on. And the booking tip below is the point of the whole screen: a star with no instruction
+ * is a grudge, a star with "ninety minutes next time" is a salon that runs better.
  */
 var WHY = ['Ran past booked time', 'Changed design mid-service', 'Asked for redo',
            'Arrived late', 'Damage to repair'];
-var WRAP = [['Book as usual', 'check'], ['Book extra time', 'clock'],
-            ['Check with them before booking', 'hand']];
 
 function openRating(){
-  var stars = 0, why = {}, wrap = {};
+  /* Held out here because tapping a star repaints the whole sheet, and a technician who typed
+     the tip before choosing the stars would otherwise watch her words vanish. */
+  var stars = 0, why = {}, tipsVal = '', noteVal = '';
 
   function hint(){
     if (!stars) return 'Rate this visit — never the person.';
-    return stars >= 4 ? 'Good visit — pick the booking note and save.'
+    return stars >= 4 ? 'Good visit — anything worth saying for next time?'
                       : 'Say what happened, so the next person can act on it.';
   }
   function ready(){
     var needWhy = stars > 0 && stars <= 3;
-    var told = Object.keys(wrap).length || (($('rnote') || { value: '' }).value.trim().length > 0);
+    var told = (($('rtips') || { value: '' }).value.trim().length > 0)
+            || (($('rnote') || { value: '' }).value.trim().length > 0);
     return stars > 0 && told && (!needWhy || Object.keys(why).length > 0);
   }
 
@@ -1552,11 +1560,25 @@ function openRating(){
           ? '<div class="lbl">What made it that way? — pick at least one</div><div class="sigrow">'
             + WHY.map(function(w){ return '<button class="rchip'+(why[w]?' on':'')+'" data-why="'+esc(w)+'">'
                 + esc(w)+'</button>'; }).join('')+'</div>' : '')
-      + '<div class="lbl">For the front desk — pick all that apply</div><div class="sigrow">'
-      + WRAP.map(function(w){ return '<button class="rchip'+(wrap[w[0]]?' on':'')+'" data-wrap="'+esc(w[0])+'">'
-          + (ICON[w[1]]||'')+esc(w[0])+'</button>'; }).join('')+'</div>'
-      + '<div class="lbl">Your booking tip — optional</div>'
-      + '<textarea class="ta" id="rnote" rows="2" placeholder="e.g. Book them with Chelsea next time."></textarea>'
+      /* ══ TWO BOXES, TWO QUESTIONS ══════════════════════════════════════════════════════
+         Trung, 17 August: 'replace the chips to a text box, and that section will be Booking
+         tips. The lower section will be the note section.'
+
+         The three chips — book as usual / book extra time / check with them first — were the
+         only three futures anyone had thought of in advance, and 'book as usual' meant
+         nothing at all: it is what happens when nobody says otherwise. A real booking tip is
+         'ninety minutes, and not with the drill', which no chip was ever going to say.
+
+         Booking tips answer WHAT SHOULD THE DESK DO NEXT TIME. The note answers WHAT
+         HAPPENED. They are read months apart by different people, which is why they are two
+         fields and not one box with a blank line in it. */
+      + '<div class="lbl">Booking tips</div>'
+      + '<textarea class="ta" id="rtips" rows="2" '
+      + 'placeholder="e.g. Ninety minutes next time, and book them with Chelsea."'
+      + '>' + esc(tipsVal) + '</textarea>'
+      + '<div class="lbl">Note</div>'
+      + '<textarea class="ta" id="rnote" rows="2" '
+      + 'placeholder="What happened today."' + '>' + esc(noteVal) + '</textarea>'
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
       + '<button class="btn" id="rsave" style="flex:1"'+(ready()?'':' disabled')+'>Save rating</button></div></div>';
 
@@ -1567,26 +1589,19 @@ function openRating(){
       b.onclick = function(){ var w=b.getAttribute('data-why');
         if (why[w]) delete why[w]; else why[w]=true; paint(); };
     });
-    /* "Book as usual" is exclusive: it cannot be true at the same time as "book extra time"
-       or "check with her first", and a desk reading both would not know which to believe. */
-    Array.prototype.forEach.call(document.querySelectorAll('[data-wrap]'), function(b){
-      b.onclick = function(){
-        var w = b.getAttribute('data-wrap');
-        if (wrap[w]) { delete wrap[w]; }
-        else if (w === 'Book as usual') { wrap = {}; wrap[w] = true; }
-        else { delete wrap['Book as usual']; wrap[w] = true; }
-        paint();
+    ['rtips','rnote'].forEach(function(id){
+      var t = $(id); if (!t) return;
+      t.oninput = function(){
+        if (id === 'rtips') tipsVal = t.value; else noteVal = t.value;
+        var b = $('rsave'); if (b) b.disabled = !ready();
       };
     });
-    if ($('rnote')) $('rnote').oninput = function(){
-      var b = $('rsave'); if (b) b.disabled = !ready();
-    };
     if ($('rsave')) $('rsave').onclick = function(){
       var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
-      /* The booking instruction rides with the reasons — it is the half the desk acts on. */
-      var chips = Object.keys(why).concat(Object.keys(wrap));
       api('techRating', { token:S.token, key:S.key, stars:stars,
-                          why:chips, note:($('rnote')||{value:''}).value }).then(function(){
+                          why: Object.keys(why),
+                          tips: ($('rtips')||{value:''}).value,
+                          note: ($('rnote')||{value:''}).value }).then(function(){
         shutVeil(); toast(' Saved. Thank you.', null, ICON.check);
         /* Re-pull the card, not just the day: without this her own rating is invisible until
            she leaves the screen and comes back, which reads as "it did not save". */
@@ -2348,7 +2363,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'fd7815263189';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'd23ef46836ae';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
