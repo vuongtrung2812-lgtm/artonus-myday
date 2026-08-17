@@ -173,8 +173,19 @@
   .sigbtn.mk{background:var(--gold-soft);border-color:#E7D6BE}
   /* A taken photo becomes the tile. Retake is the smaller, second tap — the common action
      once it is shot is looking at it, not replacing it. */
-  .shot{display:flex;flex-direction:column;gap:4px}
-  .shotbtn{width:100%;min-height:74px;border:1px solid var(--ok);border-radius:12px;cursor:pointer;
+  /* ══ EVERY SLOT IS THE SAME SIZE, IN EVERY STATE ══════════════════════════════════════
+     Trung, 17 August: 'when the photos are uploaded, the layout is change so it shows that it
+     glitch when it update the layout.'
+
+     It did. An empty slot was a 74px button; a filled one was a 74px button PLUS a 4px gap
+     PLUS a Retake link underneath — so the row grew by about twenty pixels the instant the
+     first photograph landed, and everything below it jumped. Taking all three jumped it three
+     times.
+
+     The three states now occupy exactly the same box. Retake moved inside the picture as a
+     small pill in the corner, where it costs no height at all. */
+  .shot,.photoslot{flex:1;height:74px;position:relative;display:block}
+  .shotbtn{width:100%;height:100%;border:1px solid var(--ok);border-radius:12px;cursor:pointer;
     background:var(--ok-soft) center/cover no-repeat;position:relative;overflow:hidden;
     display:flex;align-items:flex-end;justify-content:center;padding:0}
   /* A slot with a photograph still travelling: her picture, dimmed, with the word on it. The
@@ -184,8 +195,13 @@
   .shotbtn.sending .cap{background:linear-gradient(transparent,rgba(43,11,0,.78))}
   .shotbtn .cap{width:100%;background:linear-gradient(to top,rgba(43,11,0,.72),rgba(43,11,0,0));
     color:#fff;font-size:11px;font-weight:900;letter-spacing:.6px;padding:12px 0 4px}
-  .retake{background:none;border:none;color:var(--muted);font-family:inherit;font-size:11px;
-    font-weight:800;cursor:pointer;padding:2px;text-decoration:underline}
+  /* In the corner of the photograph, not underneath it — underneath is where the height came
+     from. Big enough for a thumb, dark enough to read on any picture. */
+  .retake{position:absolute;top:5px;right:5px;z-index:2;background:rgba(43,11,0,.62);
+    border:none;color:#fff;font-family:inherit;font-size:10.5px;font-weight:900;
+    letter-spacing:.4px;cursor:pointer;padding:5px 9px;border-radius:999px;line-height:1;
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .retake:hover{background:rgba(43,11,0,.82)}
   .rchip{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px dashed var(--line);
     border-radius:999px;min-height:38px;padding:0 13px;font-family:inherit;font-size:13px;font-weight:800;
     color:var(--muted);cursor:pointer}
@@ -709,7 +725,8 @@ function openVisit(key){
   S.visit = S.visits.filter(function(v){ return v.key===key; })[0] || null;
   /* S.missing belongs to ONE visit. Left behind it would tell the next client's screen that
      her photographs were already taken. */
-  S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; S.mtDraft = ''; S.view = 'visit';
+  S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; PHOTO_DONE = {};
+  S.mtDraft = ''; S.view = 'visit';
   render();
   /* Her card is a second read on purpose: the day list must paint instantly, and the card is
      the expensive part. A walk-in with no number has no card at all, and says so. */
@@ -1003,6 +1020,9 @@ document.addEventListener('focusin', function(e){
 var SHOT_BLANK = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"></svg>');
 var SHOT_CACHE = {}, SHOT_BUSY = {}, SHOT_PEND = {}, SHOT_N = 0;
+/* Which of the three this phone has successfully sent for the visit on screen. Independent of
+   the card, because a walk-in with no number does not have one. */
+var PHOTO_DONE = {};
 
 function wireShots(root){
   Array.prototype.forEach.call(root.querySelectorAll('[data-shot]'), function(img){
@@ -1112,7 +1132,7 @@ function missingBits(){
      this used to read 'Still needed: their card to open' with no way out of it from this
      screen at all. What is actually outstanding is the photographs, and she can take those. */
   var got = (S.card && S.card.photos) || {};
-  return REQ.filter(function(l){ return !got[l] && !PHOTO_UP[l]; })
+  return REQ.filter(function(l){ return !got[l] && !PHOTO_UP[l] && !PHOTO_DONE[l]; })
             .map(function(l){ return 'the ' + l.toLowerCase() + ' photo'; });
 }
 
@@ -1401,24 +1421,27 @@ function photosHtml(){
     + REQ.map(function(l){
         /* Taken, or on its way — either way the slot shows the picture. Waiting for the
            server to agree before showing her own photograph is what made this feel broken. */
-        var up = !!PHOTO_UP[l], has = !!got[l] || up, src = thumb[l];
-        if (up) return '<div class="shot" style="flex:1">'
+        var up = !!PHOTO_UP[l], has = !!got[l] || !!PHOTO_DONE[l] || up, src = thumb[l];
+        if (up) return '<div class="shot">'
           + '<button class="shotbtn sending"'
           + (src?' style="background-image:url('+src+')"':'')+'>'
           + '<span class="cap">'+l+' · Adding…</span></button></div>';
         /* Once it is taken the slot becomes the picture itself, and tapping opens it full
            size. Retaking is deliberately a second, smaller tap — the common action here is
            looking, not replacing. */
-        if (has) return '<div class="shot" style="flex:1">'
+        if (has) return '<div class="shot">'
           + '<button class="shotbtn" data-open="'+l+'"'
           + (src?' style="background-image:url('+src+')"':'')+'>'
           + (src?'':ICON.cam)+'<span class="cap">'+l+'</span></button>'
           + '<button class="retake" data-photo="'+l+'">Retake</button></div>';
-        return '<button class="sigbtn" data-photo="'+l+'" '
-          + 'style="flex:1;flex-direction:column;min-height:74px;gap:3px;'
+        /* The SAME box as a filled slot — see the CSS note above. Its own height, not the
+           button's, is what holds the row steady while the three fill up. */
+        return '<div class="photoslot"><button class="sigbtn" data-photo="'+l+'" '
+          + 'style="width:100%;height:100%;flex-direction:column;gap:3px;'
           + 'background:var(--err-soft);border-color:var(--err-line);color:var(--err)">'
           + ICON.cam+'<span>'+l+'</span>'
-          + '<span style="font-size:9.5px;letter-spacing:1px;font-weight:900;opacity:.8">REQUIRED</span></button>';
+          + '<span style="font-size:9.5px;letter-spacing:1px;font-weight:900;opacity:.8">REQUIRED</span>'
+          + '</button></div>';
       }).join('')
     + '</div></div>';
 }
@@ -1506,6 +1529,14 @@ function takePhoto(label){
     PHOTO_UP[label] = true;
     paintPhotos();
 
+    /* A photograph this phone cannot read must give the slot back, not hold it for ever. */
+    var giveUp = function(){
+      PHOTO_UP[label] = false;
+      if (S.thumbs) delete S.thumbs[label];
+      paintPhotos();
+      toast('That photo could not be read. Take it again.', 'err');
+    };
+
     shrink(f, function(dataUrl){
       /* Keep the shrunk copy: it is what the server will hold, and having it here means the
          tile never has to be fetched back. */
@@ -1517,6 +1548,11 @@ function takePhoto(label){
         /* MERGE, never replace. r.photos is this execution's view of the visit, and a photo
            that went up while this one was travelling is not in it — assigning the whole
            object would erase the other two slots she just filled. */
+        /* IT LANDED. Kept where nothing else can lose it: a walk-in with no number has no
+           card at all, so `if (S.card)` quietly threw the fact away and the tile reverted to
+           red REQUIRED after a successful upload — which is most of "I have to try multiple
+           times for it to go through". */
+        PHOTO_DONE[label] = true;
         if (S.card){
           S.card.photos = S.card.photos || {};
           Object.keys(r.photos || {}).forEach(function(k){ S.card.photos[k] = r.photos[k]; });
@@ -1528,7 +1564,14 @@ function takePhoto(label){
            appointment. Nothing in the photo path recovered it; she had to back out to Today
            and open the visit again. Kept OUTSIDE the card so it survives a visit with no
            card at all. */
-        if (r.missing) S.missing = r.missing;
+        /* THREE AT ONCE. r.missing is this execution's view, and an earlier upload answering
+           LAST would put a photograph back on the outstanding list that a later one has
+           already cleared. Anything this phone knows it has taken comes out of it. */
+        if (r.missing) S.missing = r.missing.filter(function(m){
+          return !REQ.some(function(l){
+            return PHOTO_DONE[l] && m.toLowerCase().indexOf(l.toLowerCase()) >= 0;
+          });
+        });
         paintPhotos();
         paintFinish();
         if (local) { try { URL.revokeObjectURL(local); } catch (e) {} }
@@ -1541,7 +1584,7 @@ function takePhoto(label){
         paintPhotos();
         toast(e.message,'err');
       });
-    });
+    }, giveUp);
   };
   i.click();
 }
@@ -1575,7 +1618,7 @@ function takePhoto(label){
    under threat here; her time was. */
 var PHOTO_MAX = 1280, PHOTO_Q = 0.76;
 
-function shrink(file, done){
+function shrink(file, done, no){
   function paint(bmp, w0, h0){
     var w = w0, h = h0;
     if (w > h && w > PHOTO_MAX){ h = Math.round(h * PHOTO_MAX / w); w = PHOTO_MAX; }
@@ -1586,22 +1629,43 @@ function shrink(file, done){
     ctx.drawImage(bmp, 0, 0, w, h);
     done(cv.toDataURL('image/jpeg', PHOTO_Q));
   }
+  /* IT HAD NO WAY TO FAIL. Trung, 17 August: 'I have to try multiple times for it to go
+     through.' A photograph this browser cannot decode — a HEIC straight off an iPhone camera
+     is the everyday case — fell through createImageBitmap into viaImg, where img.onload
+     simply never fired. No error, no toast, no callback: the tile sat on 'Adding…' for ever
+     and the only way out was to leave the visit and come back. The desk's copy was given an
+     onerror weeks ago; this one never was. */
+  var gaveUp = false;
+  function fail(){
+    if (gaveUp) return;                     // one failure per pick, however many paths report it
+    gaveUp = true;
+    if (typeof done === 'function' && done.length > 1) return done('', true);
+    if (typeof no === 'function') no();
+  }
   if (window.createImageBitmap){
-    createImageBitmap(file, { imageOrientation: 'from-image' })
-      .then(function(b){ paint(b, b.width, b.height); })
-      ['catch'](function(){ viaImg(file, paint); });
+    try {
+      createImageBitmap(file, { imageOrientation: 'from-image' })
+        .then(function(b){ try { paint(b, b.width, b.height); } catch (e) { fail(); } })
+        ['catch'](function(){ viaImg(file, paint, fail); });
+    } catch (e) { viaImg(file, paint, fail); }
     return;
   }
-  viaImg(file, paint);
+  viaImg(file, paint, fail);
 }
-function viaImg(file, paint){
+function viaImg(file, paint, fail){
   var r = new FileReader();
+  r.onerror = function(){ if (fail) fail(); };
   r.onload = function(){
     var img = new Image();
-    img.onload = function(){ paint(img, img.naturalWidth, img.naturalHeight); };
+    img.onload = function(){
+      try { paint(img, img.naturalWidth, img.naturalHeight); }
+      catch (e) { if (fail) fail(); }
+    };
+    /* THE LINE THAT WAS MISSING. Without it an undecodable file is silence. */
+    img.onerror = function(){ if (fail) fail(); };
     img.src = r.result;
   };
-  r.readAsDataURL(file);
+  try { r.readAsDataURL(file); } catch (e) { if (fail) fail(); }
 }
 
 /* ── the composers. Same vocabulary the desk taps, so one visit reads the same whoever
@@ -2635,7 +2699,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'a698278172d4';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '96e451239696';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
