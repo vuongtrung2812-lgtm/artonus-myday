@@ -33,6 +33,19 @@
     --gold:#B0894F; --gold-soft:#F3EADF; --line:#EADFD3;
     --ok:#3F7D5A; --ok-soft:#EEF6F0; --err:#A4392B; --err-soft:#FBEEEB; --err-line:#E8C9C2;
     --warn:#8A6D2F; --warn-soft:#FBF3E2;
+
+    /* ══ ONE SPACING SCALE ══════════════════════════════════════════════════════════════
+       Every gap on this page used to be its own number — 4, 5, 6, 8, 10, 11, 12, 14, 16 —
+       chosen a screen at a time. Nothing was badly wrong and nothing lined up either, which
+       is what makes a page feel homemade: the eye reads inconsistent rhythm as carelessness
+       long before it can name what is off.
+
+       Four steps, and they mean something:
+         s1  inside one thing        (a label and the thing it labels)
+         s2  between related things  (two buttons doing the same job)
+         s3  between blocks          (one card and the next)
+         s4  between sections        (a new heading, a new subject) */
+    --s1:6px; --s2:10px; --s3:16px; --s4:22px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;background:var(--ivory);color:var(--ink);
@@ -68,7 +81,8 @@
   .hdr img{height:26px;opacity:.92}
   .hdr h1{font-size:30px;margin-top:6px;letter-spacing:.2px}
   .hdr .sub{font-size:10.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);margin-top:3px;font-weight:800}
-  .anav{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:4px 0 12px}
+  .anav{display:flex;gap:var(--s2);align-items:center;justify-content:space-between;
+    margin:var(--s1) 0 var(--s3)}
   /* 44px, because a thumb is not a mouse pointer. These were 33 and the Alerts pill is the
      one thing on this screen she taps while holding somebody's hand. */
   .pill{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
@@ -77,22 +91,26 @@
   .pill svg{width:14px;height:14px;fill:none;stroke:var(--gold);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .dot{position:absolute;top:-5px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--err);
     color:#fff;font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:11px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:var(--s3);margin-bottom:var(--s2)}
   .card h3{font-size:21px}
   .lede,.hint{color:var(--muted);font-size:13px;margin:4px 0 0}
   .in,.ta{width:100%;font-family:inherit;font-size:16px;border:1px solid var(--line);border-radius:12px;
-    padding:12px 13px;background:var(--card);color:var(--ink);margin-bottom:9px}
+    padding:12px 13px;background:var(--card);color:var(--ink);margin-bottom:var(--s2)}
   .ta{resize:vertical;min-height:78px}
   .in:focus,.ta:focus{outline:none;border-color:var(--gold)}
   .btn{width:100%;min-height:50px;border:none;border-radius:14px;background:var(--espresso);color:#FBF8F5;
     font-family:inherit;font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;
     justify-content:center;gap:8px}
   .btn:disabled{opacity:.5}
+  /* Two decisions stacked are two decisions, not one tall block. */
+  .btn+.btn,.btn+.skip,.skip+.btn,.skip+.skip,.sigbtn+.sigbtn{margin-top:var(--s2)}
+  .card+.lbl{margin-top:var(--s4)}
   .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .ghost{background:var(--card);border:1px solid var(--line);color:var(--espresso)}
   .skip{background:transparent;border:1px solid var(--line);color:var(--muted);min-height:44px;border-radius:12px;
     font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;padding:0 15px;
-    display:inline-flex;align-items:center;justify-content:center;gap:7px}
+    display:inline-flex;align-items:center;justify-content:center;gap:8px}
   /* EVERY icon, sized and stroked, once. An SVG that misses its rule renders at the
      browser's default box with a filled path — which is how "Send" became a black blob. */
   /* EVERY inline icon has a size, whatever it sits in. An <svg> with a viewBox and no width
@@ -108,9 +126,16 @@
   .sigbtn svg,.pill svg{stroke:var(--gold)}
   .sigbtn.sent svg,.hstate svg,.btn svg{stroke:currentColor}
   .helpbtn svg{width:18px;height:18px;stroke:var(--err)}
-  .row2{display:flex;gap:8px;margin-top:8px}
-  .lbl{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;font-weight:900;color:var(--muted);margin:14px 0 6px}
-  .sigrow{display:flex;flex-wrap:wrap;gap:7px}
+  /* Stretch, so a text box and the button beside it are the same height. They were 48 and 44
+     and the row read as slightly broken. */
+  .row2{display:flex;gap:var(--s2);margin-top:var(--s2);align-items:stretch}
+  .row2>*{min-height:48px}
+  /* A section heading opens a subject, so it gets the big gap above and the small one below —
+     the label belongs to what FOLLOWS it, and the spacing should say so. */
+  .lbl{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;font-weight:900;
+    color:var(--muted);margin:var(--s4) 0 var(--s1)}
+  .card>.lbl:first-child,.lbl:first-child{margin-top:0}
+  .sigrow{display:flex;flex-wrap:wrap;gap:var(--s1)}
   .sigbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
     border-radius:12px;min-height:44px;padding:0 13px;font-family:inherit;font-size:13.5px;font-weight:800;
     color:var(--espresso);cursor:pointer}
@@ -137,7 +162,7 @@
   .rchip.on{background:var(--espresso);border:1px solid var(--espresso);color:#FBF8F5}
   .rchip svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
   .visit{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);
-    border-radius:14px;padding:13px;margin-bottom:9px;cursor:pointer}
+    border-radius:14px;padding:13px;margin-bottom:var(--s2);cursor:pointer}
   .visit .t{font-weight:900;font-size:13px;color:var(--espresso);min-width:62px}
   .visit .nm{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--espresso);line-height:1.15}
   .visit .sv{font-size:12.5px;color:var(--muted)}
@@ -147,9 +172,10 @@
   .tag.serv{background:var(--ok-soft);color:var(--ok)}
   .tag.done{background:var(--line);color:var(--muted)}
   .tag.walk{background:var(--warn-soft);color:var(--warn)}
-  .flag{background:var(--err-soft);border:1px solid var(--err-line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+  .flag{background:var(--err-soft);border:1px solid var(--err-line);border-radius:12px;
+    padding:12px 13px;margin-bottom:var(--s2)}
     /* Big enough to actually copy a design from, on a phone, at arm's length. */
-    .briefshot{display:block;width:100%;height:190px;margin:10px 0 4px;border:1px solid var(--gold);border-radius:12px;background-size:cover;background-position:center;position:relative;padding:0}
+    .briefshot{display:block;width:100%;height:190px;margin:var(--s2) 0 var(--s1);border:1px solid var(--gold);border-radius:12px;background-size:cover;background-position:center;position:relative;padding:0}
     .briefshot .cap{position:absolute;left:0;right:0;bottom:0;padding:6px;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.55));border-radius:0 0 11px 11px}
     /* A must-know she has confirmed stops shouting, so the unread ones stand out.
        AN ALLERGY NEVER GOES QUIET. Trung, 17 August: 'the allergy must-know after acknowledged
@@ -160,17 +186,18 @@
     .flag--allergy{background:var(--err-soft);border:2px solid var(--err)}
     .flag--allergy .k{font-size:11px}
     .flag--allergy .body{font-weight:800}
-    .btn--ack{margin-top:8px;padding:8px 14px;font-size:14px;min-height:40px;background:var(--err);border-color:var(--err);color:#fff}
-    .ackdone{margin-top:6px;font-size:13px;color:var(--ok);font-weight:600}
+    .btn--ack{margin-top:var(--s2);padding:8px 14px;font-size:14px;min-height:40px;background:var(--err);border-color:var(--err);color:#fff}
+    .ackdone{margin-top:var(--s1);font-size:13px;color:var(--ok);font-weight:600}
   .flag .k{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;font-weight:900;color:var(--err)}
   .flag .body{font-size:15px;line-height:1.4;margin-top:2px}
   /* A read allergy keeps its red heading; a read anything-else lets go of it. */
   .flag--read .k{color:var(--muted)}
   .flag--allergy .k{color:var(--err)}
-  .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px;font-size:13.5px}
+  .note{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:12px 13px;margin-bottom:var(--s2);font-size:13.5px}
   .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
   /* The photographs on a past note — the same record the front desk sees. */
-  .nshots{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .nshots{display:flex;gap:var(--s1);margin-top:var(--s2);flex-wrap:wrap}
   .nshots img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);
     background:var(--line)}
   /* Busy, not broken. A blank square reads as a failure. */
@@ -179,7 +206,7 @@
   .nshots img.sending{opacity:.6;border-color:var(--gold)}
   .nshot-add{width:72px;height:72px;border-radius:10px;border:1px dashed var(--line);background:none;
     font-family:inherit;font-size:11px;font-weight:800;color:var(--muted)}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0}
+  .chips{display:flex;flex-wrap:wrap;gap:var(--s1);margin:var(--s1) 0}
   .c{display:inline-block;background:var(--gold-soft);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;color:var(--espresso)}
   /* A chip she TAPS, not one she reads. Bigger than a label because it is a target for a
      thumb on a phone, held by someone whose other hand is busy. */
@@ -193,14 +220,14 @@
   .veil.on{display:flex}
   .alert{background:var(--card);border-radius:18px;padding:18px 17px 16px;width:100%;max-width:340px;
     box-shadow:0 22px 60px rgba(43,11,0,.45);max-height:84vh;overflow:auto}
-  .alert .hd{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;
+  .alert .hd{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;
     font-weight:900;color:var(--gold);margin-bottom:10px}
   .alert .hd svg{width:14px;height:14px;fill:none;stroke:var(--gold);stroke-width:2}
   .alert .item{border-top:1px solid var(--line);padding:9px 0;font-size:13.5px;line-height:1.5}
   .alert .item:first-of-type{border-top:none;padding-top:2px}
   .alert .item .who{font-size:11px;color:var(--muted);margin-top:2px}
-  .alert .item.fresh{background:var(--gold-soft);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:8px}
-  .alert .newline{font-size:11.5px;color:var(--gold);font-weight:800;margin-top:8px}
+  .alert .item.fresh{background:var(--gold-soft);margin:0 calc(var(--s3) * -1);padding-left:8px;padding-right:8px;border-radius:8px}
+  .alert .newline{font-size:11.5px;color:var(--gold);font-weight:800;margin-top:var(--s2)}
   .ba .was{color:var(--muted);text-decoration:line-through}
   .ba .arrow{color:var(--gold);font-weight:900}
   /* Help: her own dock, always reachable, never mixed with routine signals. */
@@ -217,10 +244,10 @@
   .hstate .r b{font-size:14px}
   .hstate .t2{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:900}
   .hstate svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round}
-  .hstate button{width:100%;margin-top:8px;border:none;border-radius:10px;min-height:38px;font-family:inherit;
+  .hstate button{width:100%;margin-top:var(--s2);border:none;border-radius:10px;min-height:38px;font-family:inherit;
     font-size:12.5px;font-weight:900;cursor:pointer;background:rgba(255,255,255,.92);color:var(--err)}
   .hstate.coming button{color:var(--ok)}
-  .hstate .cr{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .hstate .cr{display:flex;flex-wrap:wrap;gap:var(--s1);margin-top:var(--s2)}
   .hstate .cr button{width:auto;margin:0;background:rgba(255,255,255,.16);color:#fff;
     border:1px solid rgba(255,255,255,.35);border-radius:16px;min-height:32px;padding:0 11px;font-size:11.5px}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom));
@@ -244,20 +271,20 @@
      spinner — a spinner says "wait", a skeleton says "it is coming, and here is where". */
   .bootskel{padding-top:6px}
   .bootskel .hdr{display:flex;flex-direction:column;align-items:center;gap:10px}
-  .bootskel .skel{height:13px;border-radius:7px;margin:7px 0;
+  .bootskel .skel{height:13px;border-radius:7px;margin:var(--s1) 0;
     background:linear-gradient(90deg,rgba(43,11,0,.055) 25%,rgba(43,11,0,.11) 37%,rgba(43,11,0,.055) 63%);
     background-size:400% 100%;animation:shimmer 1.4s ease-in-out infinite}
-  .bootskel .skel-logo{width:30px;height:30px;border-radius:9px;margin:14px 0 0}
+  .bootskel .skel-logo{width:30px;height:30px;border-radius:9px;margin:var(--s3) 0 0}
   .bootskel .skel-title{width:132px;height:26px;border-radius:8px}
   .bootskel .skel-btn{height:48px;border-radius:14px;margin-top:16px}
   @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
   @media(prefers-reduced-motion:reduce){.bootskel .skel{animation:none}}
   /* The searchable pickers — the service list and the add-on list. Rows, not a <select>:
      a native select on a phone hides the price, and the price is the point. */
-  .picklist{max-height:46vh;overflow-y:auto;margin-top:10px}
+  .picklist{max-height:46vh;overflow-y:auto;margin-top:var(--s2)}
   .pick{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
     text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;
-    min-height:52px;padding:9px 13px;margin-bottom:7px;font-family:inherit;font-size:14.5px;
+    min-height:52px;padding:9px 13px;margin-bottom:var(--s1);font-family:inherit;font-size:14.5px;
     font-weight:800;color:var(--ink);cursor:pointer}
   .pick:disabled{opacity:.55}
   .pick .quiet{font-weight:700;font-size:12.5px;color:var(--muted)}
@@ -292,7 +319,7 @@
   .sigbtn:disabled{opacity:1;cursor:default}
   /* The design brief — gold, above everything, because it is the thing she is about to do. */
   .brief{display:flex;gap:9px;align-items:flex-start;background:var(--gold-soft);
-    border:1px solid var(--gold);border-radius:14px;padding:12px 13px;margin-bottom:9px;
+    border:1px solid var(--gold);border-radius:14px;padding:12px 13px;margin-bottom:var(--s2);
     font-size:14px;line-height:1.5}
   .brief svg{flex:none;stroke:var(--gold);margin-top:2px;width:16px;height:16px}
   .tag.want{background:var(--gold-soft);border-color:var(--gold);color:var(--espresso)}
@@ -657,7 +684,7 @@ function chairCard(v){
      Enter in the box sends, because a technician with one dry hand should not have to hunt
      for a button. */
   h += '<div class="lbl">Need more time?</div>'
-    + (v.moreTime ? '<div class="note" style="margin-bottom:8px">'+ICON.check
+    + (v.moreTime ? '<div class="note" style="margin-bottom:var(--s2)">'+ICON.check
         + ' The desk knows — you asked for <b>+'+v.moreTime+' min</b>. Send a new number to change it.</div>' : '')
     + '<div class="sigrow">'
     + [10,15,30].map(function(m){
@@ -1006,7 +1033,7 @@ function sentBar(v){
 function svcHtml(v){
   if (!can('tech.serviceChange')) return '';
   return '<div class="lbl">What they are having</div>'
-    + '<div class="note" style="margin-bottom:8px"><b>'+esc(v.svc||'—')+'</b>'
+    + '<div class="note" style="margin-bottom:var(--s2)"><b>'+esc(v.svc||'—')+'</b>'
     + (v.price?' · '+money(v.price):'')
     + ((v.addons&&v.addons.length)
         ? '<br><span class="quiet">'+v.addons.map(function(a){ return esc(a.label||a.name); }).join(' · ')+'</span>'
@@ -1026,7 +1053,7 @@ function openSvc(){
   $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
     + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
     + '<div id="svclist" class="picklist"><p class="lede">Loading the menu&hellip;</p></div>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:var(--s2)">Cancel</button></div>';
   withMenu(function(m){
     function paint(){
       var q = ($('svcq').value||'').trim().toLowerCase();
@@ -1056,7 +1083,7 @@ function openAddon(){
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
     + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:var(--s2)">Cancel</button></div>';
   withMenu(function(m){
     /* Only this chair's family. All seven used to be offered everywhere, told apart by
        "(pedicure)" in the label — so a manicure chair was shown Gel and Removal, which mean
@@ -1065,7 +1092,7 @@ function openAddon(){
     var list = (m.addons||[]).filter(function(a){ return !a.family || a.family === fam; });
     $('addlist').innerHTML = '<p class="lede" style="margin:0 0 6px">For a <b>'+fam+'</b>.</p>'
       + list.map(function(a){
-      return '<div class="row2" style="margin-top:8px">'
+      return '<div class="row2" style="margin-top:var(--s2)">'
         + '<button class="pick" data-add="'+esc(a.name)+'" style="flex:1"><b>'+esc(a.label)+'</b>'
         + '<span class="quiet">'+(a.price?money(a.price)+(a.per?' per '+a.per:''):'no extra charge')+'</span></button>'
         + (a.per ? '<input class="in" style="width:74px;margin:0" type="text" inputmode="numeric" '
@@ -1641,9 +1668,9 @@ function askHelp(){
         return '<button class="c pick" data-help="'+esc(r)+'">'+esc(r)+'</button>'; }).join('')
     + '</div>'
     + '<textarea class="in" id="helptext" rows="2" placeholder="Anything else they should know"'
-    + ' maxlength="200" style="margin-top:10px"></textarea>'
+    + ' maxlength="200" style="margin-top:var(--s2)"></textarea>'
     + '<button class="btn" id="helpgo" style="margin-top:12px">'+ICON.hand+'Ask for help</button>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Cancel</button></div>';
+    + '<button class="skip" onclick="shutVeil()" style="margin-top:var(--s2)">Cancel</button></div>';
 
   Array.prototype.forEach.call($('veil').querySelectorAll('[data-help]'), function(b){
     b.onclick = function(){
@@ -2149,7 +2176,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '4ea7265660ea';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '41d68d3c5505';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
