@@ -322,31 +322,6 @@
      dozen times a day; it should look like it belongs to Artonus. */
   .alert .hd .hdmark{height:16px;width:auto;margin-right:8px;vertical-align:-3px;opacity:.95}
   /* The running list of what this chair has already told the desk. */
-  /* It answers the two buttons above it, so it needs the gap that says so. It was sitting
-     flush against them and read as part of the same control. */
-  .sentbar{display:flex;gap:8px;align-items:flex-start;background:var(--ok-soft);
-    border:1px solid var(--ok);border-radius:12px;padding:12px 13px;
-    margin:var(--s2) 0 var(--s2);
-    font-size:13.5px;line-height:1.45}
-  /* WIDTH AND HEIGHT ARE NOT OPTIONAL. An inline SVG with a viewBox and no explicit size
-     expands to fill its box — the design-brief star rendered the height of the card and shoved
-     the text off the screen. flex:none stops it being squashed; it does not give it a size. */
-  .sentbar svg{flex:none;stroke:var(--ok);margin-top:2px;width:16px;height:16px}
-  /* THE RECEIPT. "Sent" is not an answer — she needs to know somebody at the desk BOOKED the
-     fifteen minutes. Amber while nobody has answered, and the clock keeps running so she can
-     decide for herself when to go and ask. */
-  .sentbar.waiting{background:var(--gold-soft);border-color:var(--gold)}
-  .sentbar.waiting svg{stroke:var(--gold)}
-  .sentbar .rows{width:100%}
-  .sentbar .r{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
-    padding:4px 0;border-top:1px solid rgba(0,0,0,.06)}
-  .sentbar .r:first-child{border-top:none;padding-top:0}
-  .sentbar .r .what{font-weight:700}
-  .sentbar .r .st{flex:none;font-size:11.5px;font-weight:800;letter-spacing:.3px;
-    text-transform:uppercase;color:var(--ok)}
-  .sentbar .r .st.ok{color:var(--ok)}
-  .sentbar .r .st.wait{color:var(--gold)}
-  .sentbar .r .st.late{color:var(--err)}
   .sigbtn.sent{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
   .sigbtn.sent svg{stroke:var(--ok)}
   .sigbtn:disabled{opacity:1;cursor:default}
@@ -755,8 +730,18 @@ function chairCard(v){
   /* What they are having, and changing it — reached when the client asks for something. */
   h += svcHtml(v);
 
-  /* Everything she has sent the desk, under everything that sends. */
-  h += sentBar(v);
+  /* THE WAITING BAR IS GONE. Trung, 17 August: 'I think we should remove the still waiting on
+     the front desk, it takes up space. And, not really useful.'
+
+     He is right and the code says why: it listed everything ever sent for the visit and never
+     dropped a line, so by the middle of an appointment it was four or five rows of which most
+     read 'DONE · FRONT DESK'. A finished thing needs no row. It had become a log pretending to
+     be a status, and it was sitting between her and the work.
+
+     Each button already carries its own sent state, so nothing about what she has pressed is
+     lost. What IS lost is the overdue alarm — the amber 'nobody has answered' after five
+     minutes. That was the one part with a job, and it can come back on its own, as one line
+     that appears only when something is genuinely unanswered and shows nothing otherwise. */
 
   /* ══ BEFORE YOU FINISH ══ one heading over everything that belongs to the end of a visit,
      so the middle of the screen is not carrying it all appointment long. */
@@ -781,11 +766,17 @@ function chairCard(v){
   }
 
   if (!v.nameOnly){
-    /* ONE door, like the desk. The kind is chosen inside, where changing her mind costs a tap
-       rather than a cancel and a second decision about which button to press. */
-    h += '<div class="lbl">Their book</div><div class="sigrow">'
-      + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write in their book</button>'
-      + '</div>';
+    /* THE PLAIN NOTE IS GONE FROM THIS SCREEN. Trung, 17 August: 'their book section should be
+       removed, because when they finish with the session, and rate the visit, a note would be
+       created. But, I do want the must know feature to be there.'
+
+       He is right — the rating already carries her words for the visit, so writing a note here
+       was a second door to the same row. A must-know is a different thing entirely: it is not
+       about today, it outlives the visit, and it is the one thing she may need to record the
+       moment it happens rather than at the end. */
+    h += '<div class="lbl">Must-know</div><div class="sigrow">'
+      + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star
+      + 'Add a must-know</button></div>';
   }
 
   if (v.state === 'finished'){
@@ -1055,45 +1046,6 @@ function paintFinish(){
  *
  * So: pressing always reads as DONE. The nagging starts only after the desk has genuinely had
  * time and not used it. */
-var NAG_AFTER = 30, LOUD_AFTER = 300;
-function waitedText(sec){
-  var m = Math.floor(sec / 60);
-  return m < 1 ? 'Waiting' : 'Waiting ' + m + ' min';
-}
-function sentBar(v){
-  var sent = v.sent || [];
-  if (!sent.length) return '';
-  /* The server sends how long each one has been waiting, measured on ITS clock — a phone
-     whose clock is a few minutes out would otherwise tell her she has been waiting since
-     before she asked. We add only the time since the answer arrived. */
-  var drift = Math.max(0, Math.round((Date.now() - (S.pollAt || Date.now())) / 1000));
-  var anyLate = false, anyNag = false;
-  var rows = sent.map(function(x){
-    var st, cls = ' ok';
-    if (x.ack && x.ack.state === 'done'){ st = 'Done · ' + esc(x.ack.by); }
-    else if (x.ack){ st = esc(x.ack.by) + ' has it'; }
-    else {
-      /* A pending line counts from her press; a real one from the server's own stamp. */
-      var sec = (x.waitedSec || 0) + (x.id === 'pending' ? 0 : drift);
-      if (!x.needsDone || sec < NAG_AFTER){ st = 'Sent'; }
-      else if (sec < LOUD_AFTER){ st = waitedText(sec); cls = ' wait'; anyNag = true; }
-      else { st = waitedText(sec); cls = ' late'; anyLate = true; anyNag = true; }
-    }
-    return '<div class="r"><span class="what">' + esc(x.label) + '</span>'
-      + '<span class="st' + cls + '">' + st + '</span></div>';
-  }).join('');
-  /* The bar only turns amber when something is genuinely overdue. Everything else — including
-     the half second between her press and the server hearing about it — is a green tick. */
-  return '<div class="sentbar' + (anyNag ? ' waiting' : '') + '">'
-    + (anyNag ? ICON.clock : ICON.check)
-    + '<div class="rows"><b>' + (anyNag ? 'Still waiting on the front desk'
-                                        : 'The front desk has it')
-    + '</b>' + rows
-    + (anyLate ? '<div class="r" style="border:0;padding-top:6px"><span class="quiet">'
-                 + 'Nobody has answered. Go and say it out loud.</span></div>' : '')
-    + '</div></div>';
-}
-
 /* THE COLOUR TEXT IS GONE. Trung, 16 August: 'remove the section on the technician side
    where I have to enter the color, its pointless because we have the photo.'
 
@@ -1440,23 +1392,20 @@ function openCompose(kind){
 
      The kind is a toggle inside the sheet, not two different sheets, so changing her mind
      halfway costs a tap instead of a cancel. */
-  COMP = { kind: kind === 'mk' ? 'mk' : 'note', picked: {}, cls: 'other', shots: [] };
+  /* Must-know only from the chair now — see the note above the button. The kind stays on COMP
+     because saveCompose still routes on it and the desk composer is unchanged. */
+  COMP = { kind: 'mk', picked: {}, cls: 'other', shots: [] };
   paintCompose();
 }
 
 function paintCompose(){
   var mk = COMP.kind === 'mk';
   $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>Their book</h3>'
-    + '<div class="kindpick">'
-    + '<button type="button" class="kind'+(mk?'':' on')+'" data-ckind="note">'
-    + '<b>Note</b><small>What happened today</small></button>'
-    + '<button type="button" class="kind warn'+(mk?' on':'')+'" data-ckind="mk">'
-    + '<b>Must-know</b><small>Stays on their card until it is taken off</small></button>'
-    + '</div>'
-    + '<textarea class="ta" id="ctext" rows="4" placeholder="'
-    + (mk ? 'What everyone has to know' : 'What happened — in your own words')
-    + '">' + esc(COMP.text || '') + '</textarea>'
+  $('veil').innerHTML = '<div class="alert"><h3>Add a must-know</h3>'
+    + '<p class="lede">It stays on their card until somebody takes it off, and every visit '
+    + 'after this one starts with it.</p>'
+    + '<textarea class="ta" id="ctext" rows="4" placeholder="What everyone has to know"'
+    + '>' + esc(COMP.text || '') + '</textarea>'
     + (mk ? '<button type="button" class="rchip'+(COMP.cls==='allergy'?' on':'')+'" id="callergy" '
           + 'style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
           + '<p class="hint" style="margin:-2px 0 var(--s2)">Every technician is asked to tap '
@@ -1468,16 +1417,6 @@ function paintCompose(){
     + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Cancel</button>'
     + '<button class="btn" id="csave" style="flex:1" disabled>Save</button></div></div>';
 
-  Array.prototype.forEach.call(document.querySelectorAll('[data-ckind]'), function(b){
-    b.onclick = function(){
-      var want = b.getAttribute('data-ckind') === 'mk';
-      if (want === (COMP.kind === 'mk')) return;
-      /* Keep what she has already typed. Changing the kind is not starting again. */
-      COMP.text = ($('ctext') || { value: '' }).value;
-      COMP.kind = want ? 'mk' : 'note';
-      paintCompose();
-    };
-  });
   /* ONE toggle, not three chips. A must-know either is an allergy or it is not, and the
      difference is whether it shows in red at the top of the card for ever. Guessing it from
      the words would be a decision nobody asked me to make. */
@@ -2409,7 +2348,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'c48a8c5d00bc';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'fd7815263189';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
