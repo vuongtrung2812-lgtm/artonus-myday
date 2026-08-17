@@ -139,6 +139,12 @@
   .flag .k{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;font-weight:900;color:var(--err)}
   .note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px;font-size:13.5px}
   .note .by{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800}
+  /* The photographs on a past note — the same record the front desk sees. */
+  .nshots{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .nshots img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);
+    background:var(--line)}
+  .nshot-add{width:72px;height:72px;border-radius:10px;border:1px dashed var(--line);background:none;
+    font-family:inherit;font-size:11px;font-weight:800;color:var(--muted)}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0}
   .c{display:inline-block;background:var(--gold-soft);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;color:var(--espresso)}
   /* A chip she TAPS, not one she reads. Bigger than a label because it is a target for a
@@ -602,6 +608,7 @@ function viewVisit(){
   $('app').innerHTML = h;
   if ($('seat')) $('seat').onclick = function(){ sig('SEATED', {}, 'seat'); };
   wireChair(v);
+  wireShots(document);
 }
 
 function chairCard(v){
@@ -764,7 +771,16 @@ function cardHtml(){
         return '<div class="note"><div class="by">'+esc(n.author)+' · '+esc(n.when)
           + (n.stars?' · <span class="stars">'+'★★★★★'.slice(0,n.stars)+'</span>':'')+'</div>'
           + (n.chips.length?'<div class="chips">'+n.chips.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')+'</div>':'')
-          + (n.text?esc(n.text):'')+'</div>'; }).join('')
+          + (n.text?esc(n.text):'')
+          /* THE PHOTOS FROM THAT VISIT. This is what a colour name cannot do: five weeks
+             later the shade may be discontinued, renamed, or simply written down wrong, and
+             the picture is still exactly right. Blank tiles first, filled as they arrive. */
+          + '<div class="nshots">'
+          + (n.shots||[]).map(function(id){
+              return '<img data-shot="'+esc(id)+'" alt="from that visit" src="'+SHOT_BLANK+'">'; }).join('')
+          + '<button class="nshot-add" data-addshot="'+esc(n.id)+'">+ Photo</button>'
+          + '</div>'
+          + '</div>'; }).join('')
       : '<p class="lede">No notes yet — you would be the first.</p>');
   return h + '</div>';
 }
@@ -772,6 +788,63 @@ function cardHtml(){
 /* THE THREE PHOTOS THAT ARE NOT OPTIONAL. Before proves what she walked in with; After and
    Color are what the next technician needs when she comes back in five weeks. */
 var REQ = ['Before','After','Color'];
+
+/* ══ THE PHOTOS ON HER PAST NOTES ══════════════════════════════════════════════════════════
+   Same record the front desk sees, from the same store. Kept for as long as this page is
+   open: her card is rebuilt on every poll and re-fetching a photograph each time would be
+   a second of waiting, over and over, for bytes that have not changed. */
+var SHOT_BLANK = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"></svg>');
+var SHOT_CACHE = {}, SHOT_BUSY = {};
+
+function wireShots(root){
+  Array.prototype.forEach.call(root.querySelectorAll('[data-shot]'), function(img){
+    var id = img.getAttribute('data-shot');
+    if (SHOT_CACHE[id]) { img.src = SHOT_CACHE[id]; }
+    else if (!SHOT_BUSY[id]) {
+      SHOT_BUSY[id] = true;
+      api('techShot', { token: S.token, id: id }).then(function(r){
+        SHOT_BUSY[id] = false;
+        if (!r || !r.data) return;
+        SHOT_CACHE[id] = r.data;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-shot="'+id+'"]'),
+          function(t){ t.src = r.data; });
+      })['catch'](function(){ SHOT_BUSY[id] = false; });
+    }
+    img.onclick = function(){
+      if (!SHOT_CACHE[id]) return;
+      $('veil').className = 'veil on';
+      $('veil').innerHTML = '<div class="alert" style="max-width:none;width:100%;background:none;'
+        + 'box-shadow:none;padding:0;text-align:center">'
+        + '<img src="'+SHOT_CACHE[id]+'" alt="from that visit" style="max-width:100%;max-height:70vh;'
+        + 'border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'
+        + '<button class="btn" style="margin-top:14px" onclick="shutVeil()">Close</button></div>';
+    };
+  });
+  Array.prototype.forEach.call(root.querySelectorAll('[data-addshot]'), function(b){
+    b.onclick = function(){
+      var noteId = b.getAttribute('data-addshot');
+      var i = document.createElement('input');
+      i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
+      i.onchange = function(){
+        var f = i.files && i.files[0]; if (!f) return;
+        b.disabled = true; b.textContent = 'Saving…';
+        shrink(f, function(dataUrl){
+          api('techNoteShot', { token: S.token, noteId: noteId, data: dataUrl })
+            .then(function(r){
+              if (r && r.id) SHOT_CACHE[r.id] = dataUrl;
+              toast('The photo is on her note.');
+              openVisit(S.key);
+            })['catch'](function(e){
+              b.disabled = false; b.textContent = '+ Photo';
+              toast(String(e && e.message || e));
+            });
+        });
+      };
+      i.click();
+    };
+  });
+}
 
 /* What is still outstanding before this visit can be closed.
  *
@@ -2045,7 +2118,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '0630875d9a0d';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '294f1f314011';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
