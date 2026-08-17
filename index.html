@@ -445,14 +445,42 @@ var BOOK = 'https://script.google.com/macros/s/AKfycby0SWGq-PC702gm02TV8mzrOw36w
    out from under a photo that is still uploading. */
 var INFLIGHT = 0;
 
+/**
+ * A REQUEST THAT NEVER ANSWERS IS THE ONE THAT CAUSES THE DAMAGE.
+ *
+ * Trung, 17 August: a send that appeared to hang led to a second press, and both landed.
+ * Without a deadline the phone waits on a dead socket for as long as the OS allows — long
+ * enough that a technician reasonably concludes it failed and tries again.
+ *
+ * A timeout ALONE would make that worse, not better: giving up and retrying is exactly how
+ * one press becomes two writes. It is only safe because every send now carries an opId the
+ * server remembers for ten minutes, so a retry of a request that did land is answered from
+ * that memory instead of written again.
+ *
+ * Uploads get longer: half a megabyte on salon wifi is not a stall.
+ */
+var API_TIMEOUT = 20000, API_TIMEOUT_SLOW = 60000;
 function api(name, payload){
   INFLIGHT++;
   var done = function(){ INFLIGHT = Math.max(0, INFLIGHT - 1); };
+  var slow = /Photo|Shot|Upload/i.test(String(name));
+  var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+  var timer = setTimeout(function(){
+    if (ctl) ctl.abort();
+  }, slow ? API_TIMEOUT_SLOW : API_TIMEOUT);
+  var stop = function(){ clearTimeout(timer); };
   return fetch(BOOK, {
     method: 'POST',
     redirect: 'follow',
+    signal: ctl ? ctl.signal : undefined,
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ name: name, payload: payload || {} })
+  }).then(function(r){
+    stop();
+    return r.text();
+    return r;
+  }, function(e){
+    stop(); throw e;
   }).then(function(r){
     return r.text();
   }).then(function(t){
@@ -468,9 +496,19 @@ function api(name, payload){
     if (out.error) throw new Error(out.error);
     return out;
   })['catch'](function(e){
+    /* Named for what she should DO about it. 'AbortError' is not a sentence. */
+    if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))
+      throw new Error('That took too long. Press send again — it will not go twice.');
     if (e && e.message) throw e;
     throw new Error('No connection. Check the wifi and try again.');
   });
+}
+
+/* One id per press, so a retry of a request that already landed is answered from the server's
+   memory instead of written a second time. */
+var OP_N = 0;
+function opId(kind){
+  return (kind || 'op') + '-' + (S.key || 'x') + '-' + Date.now() + '-' + (++OP_N);
 }
 
 /* The token lives on the phone and nowhere else. localStorage rather than a cookie: it is
@@ -1091,8 +1129,10 @@ function withMenu(then){
 
    Both sheets keep the same shape now — a chosen row, a Send button that names what it is
    about to do, and Cancel meaning cancel. */
+var SVC_OP = '';
 function openSvc(){
   var picked = '';
+  SVC_OP = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
     + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
@@ -1116,6 +1156,7 @@ function openSvc(){
           /* One service, so choosing is choosing — tapping the chosen one again unchooses it. */
           var to = b.getAttribute('data-svc');
           picked = (picked === to) ? '' : to;
+          SVC_OP = '';                                  // a different choice is a different press
           paint();
         };
       });
@@ -1128,15 +1169,19 @@ function openSvc(){
       if (!picked) return;
       var to = picked, go = $('svcgo');
       go.disabled = true; go.innerHTML = 'Sending&hellip;';
-      api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to } })
-        .then(function(){ shutVeil(); toast('The desk has it — '+to); refresh(true); })
+      if (!SVC_OP) SVC_OP = opId('svc');
+      api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to },
+                      opId: SVC_OP })
+        .then(function(){ SVC_OP = ''; shutVeil(); toast('The desk has it — '+to); refresh(true); })
         ['catch'](function(e){ go.disabled = false; go.innerHTML = 'Send &mdash; ' + esc(to);
                                toast(e.message,'err'); });
     };
   });
 }
+var ADD_OP = '';
 function openAddon(){
   var picked = {};
+  ADD_OP = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>Add an add-on</h3>'
     + '<div id="addlist"><p class="lede">Loading&hellip;</p></div>'
@@ -1171,6 +1216,11 @@ function openAddon(){
             var qf = $(qid(name));
             picked[name] = qf ? Math.max(1, Number(qf.value)||1) : 1;
           }
+          /* CHANGING THE SELECTION IS A NEW PRESS. The id is what stops a retry writing
+             twice, so reusing it after she has added something else would have the server
+             answer the retry from memory and silently never write the new item. Same thing
+             again keeps the id; a different thing earns a fresh one. */
+          ADD_OP = '';
           paint();
         };
       });
@@ -1179,7 +1229,10 @@ function openAddon(){
       list.forEach(function(a){
         var qf = $(qid(a.name));
         if (qf) qf.oninput = function(){
-          if (picked[a.name]) picked[a.name] = Math.max(1, Number(qf.value)||1);
+          if (!picked[a.name]) return;
+          var n = Math.max(1, Number(qf.value)||1);
+          if (n !== picked[a.name]) ADD_OP = '';        // a changed count is a changed press
+          picked[a.name] = n;
         };
       });
 
@@ -1196,26 +1249,28 @@ function openAddon(){
       if (!names.length) return;
       var go = $('addgo');
       go.disabled = true; go.innerHTML = 'Sending&hellip;';
-      /* One at a time, in order, so the desk's ledger reads the way she chose them and a
-         failure names the one that failed rather than the whole basket. */
-      var i = 0;
-      (function next(){
-        if (i >= names.length){
+      /* ONE MESSAGE, NOT ONE PER ADD-ON. Sending them in a row was three locks, three
+         doorbells and three separate lines on the desk's screen for what was one press —
+         which is what made a mis-tap look like spam and gave the desk nothing to undo. */
+      if (!ADD_OP) ADD_OP = opId('add');
+      api('signals', { token:S.token, key:S.key, opId: ADD_OP,
+                       items: names.map(function(n){
+                         return { kind:'ADDON', payload:{ name:n, qty:picked[n] } }; }) })
+        .then(function(){
+          ADD_OP = '';
           shutVeil();
           toast(names.length === 1 ? 'Added — the desk has it'
                                    : 'Added ' + names.length + ' — the desk has them');
           refresh(true);
-          return;
-        }
-        var name = names[i++];
-        api('signal', { token:S.token, key:S.key, kind:'ADDON',
-                        payload:{ name:name, qty: picked[name] } })
-          .then(next)
-          ['catch'](function(e){
-            go.disabled = false; go.innerHTML = 'Send ' + (names.length - i + 1) + ' left';
-            toast(name + ' did not send: ' + e.message, 'err');
-          });
-      })();
+        })
+        ['catch'](function(e){
+          /* ADD_OP is deliberately KEPT. Pressing send again reuses it, so if the first
+             attempt actually landed the server answers from memory instead of writing a
+             second copy — the whole reason the timeout above is safe. */
+          go.disabled = false;
+          go.innerHTML = 'Send ' + names.length + (names.length === 1 ? ' add-on' : ' add-ons');
+          toast(e.message, 'err');
+        });
     };
   });
 }
@@ -1736,6 +1791,9 @@ function sig(kind, payload, btn){
      preview()'s render() tore the node out from under it a line later. Stamping afterwards
      means it lands on whatever the rebuild produced, and for anything the model already draws
      as sent it is simply redundant rather than a lie. */
+  /* One id for this press. If the answer never comes and she presses again, the server
+     recognises it and does not write a second time. */
+  var op = opId(kind.toLowerCase());
   var undo = preview(kind, payload);
   el = (typeof btn === 'string') ? $(btn) : el;
   if (el && document.body.contains(el)){
@@ -1743,7 +1801,7 @@ function sig(kind, payload, btn){
     el.innerHTML = ICON.check + ' Sent';
     el.className = (el.className || '').replace(' sent','') + ' sent';
   }
-  api('signal', { token:S.token, key:S.key, kind:kind, payload:payload }).then(function(){
+  api('signal', { token:S.token, key:S.key, kind:kind, payload:payload, opId: op }).then(function(){
     S.busy = false;
     if (el) el.disabled = false;
     /* NO refresh() here on purpose. The two calls that used to run at this point are what he
@@ -2364,7 +2422,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'd5daf382b910';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2651250f9198';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
