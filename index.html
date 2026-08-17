@@ -618,7 +618,6 @@ function chairCard(v){
      the server does not have — and it left her with a "Rate the visit" button that could
      only ever refuse, because rating requires the photos she was never allowed to take. */
   h += photosHtml();
-  h += colorHtml(v);
   h += svcHtml(v);
 
   h += sentBar(v);
@@ -943,47 +942,15 @@ function sentBar(v){
     + '</div></div>';
 }
 
-/* ── WHAT COLOUR SHE HAD ────────────────────────────────────────────────────
-   A photograph of the color is not a record of it. This is the bit a returning client
-   actually asks for by name. */
-function colorHtml(v){
-  var done = S.card && S.card.color;
-  return '<div class="lbl">The color she had</div>'
-    + (done
-        ? '<div class="note"><b>'+esc(done)+'</b><br>'
-          + '<button class="skip" style="margin-top:8px" onclick="openColor()">Change it</button></div>'
-        : '<button class="sigbtn" style="width:100%" onclick="openColor()">'
-          + ICON.plus+'Record the color</button>'
-          /* It used to block the close-out and no longer does — Trung, 2026-08-15. A
-             technician standing over a finished client, told she cannot close out until she
-             types a shade number she may have to go and find, types anything, and a field
-             full of guesses is worse than an empty one. Saying why it is worth doing works
-             better than making it compulsory. */
-          + '<p class="lede" style="margin:6px 0 0">Not needed to close her out.</p>');
-}
-function openColor(){
-  $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>The color she had</h3>'
-    + '<p class="lede">Brand and shade, so the next person can match it without guessing.</p>'
-    + '<input class="in" id="colbrand" placeholder="Brand (OPI, Gelish…)" autocomplete="off">'
-    + '<input class="in" id="colname" placeholder="Shade name or number" autocomplete="off" style="margin-top:8px">'
-    + '<button class="btn" id="colgo" style="margin-top:12px">Save the color</button>'
-    + '<button class="skip" onclick="shutVeil()" style="margin-top:8px">Not now</button></div>';
-  $('colgo').onclick = function(){
-    var name = ($('colname').value||'').trim();
-    if (!name) return toast('Which color? At least the name or number.','err');
-    var b = $('colgo'); b.disabled = true; b.innerHTML = 'Saving…';
-    api('techColor', { token:S.token, key:S.key, brand:($('colbrand').value||'').trim(), name:name })
-      .then(function(r){
-        shutVeil(); toast('Color saved — ' + r.label);
-        /* Re-read the card so the finish gate sees it immediately — otherwise she saves the
-           color and the button still tells her it is missing. */
-        return api('techClient', { token:S.token, key:S.key });
-      })
-      .then(function(c){ if (c) { S.card = c; render(); } })
-      ['catch'](function(e){ b.disabled = false; b.innerHTML = 'Save the color'; toast(e.message,'err'); });
-  };
-}
+/* THE COLOUR TEXT IS GONE. Trung, 16 August: 'remove the section on the technician side
+   where I have to enter the color, its pointless because we have the photo.'
+
+   He is right, and the field had already lost its last job: it stopped blocking the close-out
+   on 15 August because a technician told she cannot finish until she types a shade number
+   types anything, and a field full of guesses is worse than an empty one. What is left is the
+   photograph, which cannot be guessed and cannot go out of date. techColor still exists on
+   the server for anything that already recorded a shade; nothing calls it from here.
+*/
 
 /* ── CHANGING THE SERVICE, FROM THE CHAIR ───────────────────────────────────
    The permission existed and there was nothing behind it. Searchable, like the desk's, and
@@ -2134,7 +2101,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '1e2c1efeb4eb';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '4b8c5b037e23';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
