@@ -94,6 +94,8 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
     padding:var(--s3);margin-bottom:var(--s2)}
   .card h3{font-size:21px}
+  /* A heading needs a breath before the first thing under it. */
+  .card h3+.lbl{margin-top:var(--s2)}
   .lede,.hint{color:var(--muted);font-size:13px;margin:4px 0 0}
   .in,.ta{width:100%;font-family:inherit;font-size:16px;border:1px solid var(--line);border-radius:12px;
     padding:12px 13px;background:var(--card);color:var(--ink);margin-bottom:var(--s2)}
@@ -143,6 +145,13 @@
     color:var(--muted);margin:var(--s4) 0 var(--s1)}
   .card>.lbl:first-child,.lbl:first-child{margin-top:0}
   .sigrow{display:flex;flex-wrap:wrap;gap:var(--s1)}
+  /* The end of the visit, kept together and set apart, so the middle of the screen is not
+     carrying it all appointment long. A hairline, not another card — it is still the same
+     card, just a later part of it. */
+  .endblk{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
+  .endhd{font-family:'Cormorant Garamond',Georgia,serif;font-size:19px;font-weight:700;
+    color:var(--espresso);margin-bottom:var(--s1)}
+  .endblk>.lbl:first-of-type{margin-top:var(--s3)}
   .sigbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);
     border-radius:12px;min-height:44px;padding:0 13px;font-family:inherit;font-size:13.5px;font-weight:800;
     color:var(--espresso);cursor:pointer}
@@ -678,22 +687,36 @@ function viewVisit(){
 }
 
 function chairCard(v){
+  /* ══ ORDERED BY THE WORK, NOT BY THE FEATURE LIST ═══════════════════════════════════════
+     Trung, 17 August: 'prioritize the information that the technician needs when she works,
+     and the workflow that she has to go through, and the features that she will use most, I
+     suspect the feature that she use the most is going to be the need more time.'
+
+     He is right about the order and about which one wins. Three moments, and they are not
+     equally long:
+
+       AT THE SEAT     once, thirty seconds — read the card, take the before photo
+       WHILE WORKING   the whole appointment — running over, an add-on, a raised hand
+       BEFORE FINISH   once, at the end — the other photos, a note, a rating, rebooking
+
+     The screen used to be in the order the features were built: all three photos first,
+     including the two that cannot be taken yet, and the time buttons — the thing she reaches
+     for with a client's hand in hers — below the fold.
+
+     So: the before photo leads ONLY while it is missing, then gets out of the way. Time comes
+     first for the rest of the visit. Everything that belongs to the end is under one heading
+     at the end. */
   var h = '<div class="card"><h3>In the chair</h3>';
+  var got = (S.card && S.card.photos) || {};
+  var atTheSeat = !got['Before'];
 
-  /* Photos for EVERY visit, including a walk-in who gave no number. techPhoto_ files them
-     against the visit key, not against a phone, so hiding these was the UI inventing a limit
-     the server does not have — and it left her with a "Rate the visit" button that could
-     only ever refuse, because rating requires the photos she was never allowed to take. */
-  h += photosHtml();
-  h += svcHtml(v);
+  /* AT THE SEAT. The before photo is the only one that can be taken now, and it is the one
+     the whole record depends on — there is no second chance at what the hands looked like
+     when she sat down. */
+  if (atTheSeat) h += photosHtml();
 
-  h += sentBar(v);
-
-  /* THE STANDING REQUEST, SHOWN. The chips reflect what the desk is already holding and stay
-     tappable so she can change the number — the demo deliberately does not disable them.
-     Enter in the box sends, because a technician with one dry hand should not have to hunt
-     for a button. */
-  h += '<div class="lbl">Need more time?</div>'
+  /* WHILE WORKING — the most-used control, first, and never below the fold. */
+  h += '<div class="lbl"' + (atTheSeat ? '' : ' style="margin-top:var(--s2)"') + '>Need more time?</div>'
     + (v.moreTime ? '<div class="note" style="margin-bottom:var(--s2)">'+ICON.check
         + ' The desk knows — you asked for <b>+'+v.moreTime+' min</b>. Send a new number to change it.</div>' : '')
     + '<div class="sigrow">'
@@ -712,6 +735,18 @@ function chairCard(v){
     + '<button class="sigbtn'+(v.almost?' sent':'')+'"'+(v.almost?' disabled':'')+' data-sig="ALMOST_DONE">'
     + (v.almost ? ICON.check+'Desk notified' : ICON.clock+'Tell the desk — almost done')
     + '</button></div>';
+
+  /* What they are having, and changing it — reached when the client asks for something. */
+  h += svcHtml(v);
+
+  /* Everything she has sent the desk, under everything that sends. */
+  h += sentBar(v);
+
+  /* ══ BEFORE YOU FINISH ══ one heading over everything that belongs to the end of a visit,
+     so the middle of the screen is not carrying it all appointment long. */
+  h += '<div class="endblk"><div class="endhd">Before you finish</div>';
+
+  if (!atTheSeat) h += photosHtml();
 
   if (can('tech.serviceChange')){
     var tierNow = String(v.tier || '');
@@ -732,26 +767,25 @@ function chairCard(v){
   }
 
   if (!v.nameOnly){
-    h += '<div class="lbl">Them book</div><div class="sigrow">'
+    h += '<div class="lbl">Their book</div><div class="sigrow">'
       + '<button class="sigbtn" onclick="openCompose(\'note\')">'+ICON.plus+'Write a note</button>'
       + '<button class="sigbtn mk" onclick="openCompose(\'mk\')">'+ICON.star+'Add a must-know</button>'
       + '</div>';
   }
 
-  var got = (S.card && S.card.photos) || {};
   if (v.state === 'finished'){
     h += (S.card && S.card.rated)
       ? '<div class="lbl">Your rating</div><p class="lede" style="margin:0">'
         + 'Saved: <span class="stars">'+'★★★★★'.slice(0,S.card.rated.stars)+'</span></p>'
-      : '<button class="btn" style="margin-top:14px" onclick="openRating()">'+ICON.star+'Rate the visit</button>';
+      : '<button class="btn" style="margin-top:var(--s3)" onclick="openRating()">'+ICON.star+'Rate the visit</button>';
   } else {
     /* Straight from the server, so the button and the refusal cannot disagree. It says what
        is outstanding rather than sitting dead with no explanation. */
     var short = missingBits();
-    h += '<button class="btn" id="finish" style="margin-top:14px"'+(short.length?' disabled':'')+'>'
+    h += '<button class="btn" id="finish" style="margin-top:var(--s3)"'+(short.length?' disabled':'')+'>'
       + (short.length ? 'Still needed: ' + short.join(', ') : 'They are finished') + '</button>';
   }
-  return h + '</div>';
+  return h + '</div></div>';
 }
 
 /* How far back the average reaches, said the way a person says it. The number comes from the
@@ -2186,7 +2220,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '8bdde399fa34';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '5485f682099c';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
