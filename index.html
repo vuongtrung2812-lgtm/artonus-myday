@@ -337,6 +337,17 @@
   .vnote .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 11px}
   .vnote .chip{font-size:11.5px;font-weight:700;color:var(--ink);border:1px solid var(--line);
     border-radius:999px;padding:3px 9px;line-height:1.3;background:none}
+  /* Two jobs, one screen: the work happening now, and the record of every visit before it.
+     The same segmented control the desk uses, sized for a thumb. */
+  .subtabs{display:flex;gap:4px;background:var(--gold-soft);border:1px solid var(--line);
+    border-radius:14px;padding:4px;margin:0 0 var(--s2)}
+  .st{flex:1;min-height:44px;border:none;border-radius:11px;background:none;font-family:inherit;
+    font-size:14px;font-weight:800;color:var(--muted);touch-action:manipulation;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  .st.on{background:var(--card);color:var(--espresso);box-shadow:0 1px 3px rgba(43,11,0,.08)}
+  .st .n{font-size:11px;font-weight:900;color:var(--gold);background:var(--gold-soft);
+    border-radius:999px;padding:1px 6px;line-height:1.5}
+  .st.on .n{background:var(--gold-soft)}
   /* A quiet way between the two halves of the screen. Full width so a thumb cannot miss it. */
   .jump{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
     min-height:44px;margin:0 0 var(--s2);padding:0 14px;border:1px solid var(--line);
@@ -534,7 +545,7 @@ var ICON = {
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
 var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{}, mtDraft:'',
-          card:null, thumbs:null, missing:null, seatMode:true, rated:false,
+          card:null, thumbs:null, missing:null, seatMode:true, tab:'session', rated:false,
           key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
@@ -860,7 +871,7 @@ function openVisit(key){
      her photographs were already taken. */
   S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; PHOTO_DONE = {};
   S.rated = false;
-  S.mtDraft = ''; S.view = 'visit';
+  S.mtDraft = ''; S.tab = 'session'; S.view = 'visit';
   /* Decided here and nowhere else — see the note in chairCard. Optimistic on open: a visit
      whose before photo is already taken corrects itself when the card lands, ONCE, before
      she has had time to reach for anything. */
@@ -904,7 +915,8 @@ function openVisit(key){
 function viewVisit(){
   var v = S.visit;
   if (!v) { S.view='today'; return render(); }
-  var h = head('Their profile');
+  /* The strap follows the tab, so the top of the screen and the middle never disagree. */
+  var h = head(S.tab === 'profile' ? 'Their profile' : 'This session');
   h += '<button class="skip" onclick="S.view=\'today\';render()" style="margin-bottom:10px">'
      + ICON.back+' Today</button>';
 
@@ -922,11 +934,32 @@ function viewVisit(){
     + '</div>';
 
   h += cardHtml();
-  /* One tap to the notes and one tap back. The work is on top now, so the past is the thing
-     that needs a shortcut. */
-  if (S.card && S.card.ok && (S.card.visits || []).length)
-    h += '<button class="jump" onclick="jumpTo(\'profile\')">'
-       + ICON.search + 'Their past visits · ' + (S.card.visits || []).length + '</button>';
+
+  /* ══ TWO TABS, AND THE MUST-KNOWS ABOVE BOTH ═════════════════════════════════════════
+     Trung, 18 August: "I want you to make sub tabs, that would seem more organized."
+
+     The screen holds two different jobs — the work happening right now, and the record of
+     every visit before it — and stacking them made a regular's card a very long page. A tab
+     each, the same segmented control the desk uses.
+
+     WHAT IS NOT IN A TAB: the must-knows and the design they asked for. An allergy is read
+     before anyone starts, and something read only if somebody thinks to look is not a safety
+     net. Those stay above, on every tab. */
+  var nNotes = (S.card && S.card.visits || []).length;
+  h += '<div class="subtabs">'
+    + '<button class="st' + (S.tab === 'profile' ? '' : ' on') + '" data-tab="session">Session</button>'
+    + '<button class="st' + (S.tab === 'profile' ? ' on' : '') + '" data-tab="profile">Profile'
+    + (nNotes ? ' <span class="n">' + nNotes + '</span>' : '') + '</button>'
+    + '</div>';
+
+  if (S.tab === 'profile'){
+    h += profileHtml();
+    h += dockHtml();
+    paintInto('app', h);
+    wireSubtabs();
+    wireShots(document);
+    return;
+  }
 
   /* ══ THE WORK CARD GOES WHEN THE WORK IS DONE ═════════════════════════════════════════
      Trung, 17 August: 'when the technician have done giving a rating, the in the chair should
@@ -951,14 +984,27 @@ function viewVisit(){
   } else {
     h += chairCard(v);
   }
-  /* THE PROFILE LAST. Reference, not work — and with a dozen visits on a regular it used to
-     push every control she needs mid-service a screen and a half down the page. */
-  h += profileHtml();
   h += dockHtml();
   paintInto('app', h);
+  wireSubtabs();
   if ($('seat')) $('seat').onclick = function(){ sig('SEATED', {}, 'seat'); };
   wireChair(v);
   wireShots(document);
+}
+
+function wireSubtabs(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function(b){
+    b.onclick = function(){
+      var want = b.getAttribute('data-tab');
+      if (want === S.tab) return;
+      S.tab = want;
+      /* Back to the top: the two tabs are different lengths, and landing halfway down the
+         other one reads as the app losing its place. */
+      var se = document.scrollingElement || document.documentElement;
+      render();
+      se.scrollTop = 0;
+    };
+  });
 }
 
 function chairCard(v){
@@ -1206,8 +1252,11 @@ function jumpTo(id){
 function profileHtml(){
   var c = S.card;
   if (!c || !c.ok) return '';
-  var h = '<button class="jump" onclick="jumpTo(\'app\')">' + ICON.back + 'Back to the session</button>';
-  h += '<div class="card" id="profile"><h3>In their profile</h3><div class="chips">'
+  var h = '';
+  /* No heading here: the tab above already says Profile, and repeating it is one more line
+     between her and what she came to read. */
+  h += '<div class="card" id="profile"><div class="lbl" style="margin-top:0">Stays in their profile</div>'
+    + '<div class="chips">'
     + ((c.standing||[]).length ? c.standing.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')
        : '<span class="quiet">Nothing yet.</span>')
     + '</div>';
@@ -3111,7 +3160,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'f4ada00765e3';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '82f218f1716d';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
