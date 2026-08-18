@@ -569,7 +569,7 @@ function viewEnrol(){
     var b=$('join'); b.disabled=true; b.textContent='Checking…';
     api('enrol', { code:c, agent:navigator.userAgent.slice(0,120) }).then(function(r){
       saveToken(r.token); S.token=r.token; S.tech=r.person; S.chair=r.chair;
-      toast(' Signed in as '+r.person, null, ICON.check);
+      toast('Signed in as '+r.person, null, ICON.check);
       loadDay();
     })['catch'](function(e){
       b.disabled=false; b.textContent='Use this phone'; toast(e.message,'err');
@@ -708,7 +708,7 @@ function ackFlag(id, btn){
   }
   api('techAck', { token: S.token, key: S.key, id: id })
     .then(function(){
-      toast(' Thank you — that is written down.', null, ICON.check);
+      toast('Thank you — that is written down.', null, ICON.check);
     })
     ['catch'](function(e){
       /* It did not land, so it must stop saying it did. */
@@ -1915,7 +1915,7 @@ function openRating(){
            "saved" over a must-know that never landed. */
         if (r && r.mustKnowError) toast('Rating saved. The must-know did not: '
                                         + r.mustKnowError, 'err');
-        shutVeil(); toast(' Saved. Thank you.', null, ICON.check);
+        shutVeil(); toast('Saved. Thank you.', null, ICON.check);
         /* Re-pull the card, not just the day: without this her own rating is invisible until
            she leaves the screen and comes back, which reads as "it did not save". */
         api('techClient', { token:S.token, key:S.key }).then(function(c){ S.card = c; render(); })
@@ -2453,7 +2453,7 @@ function mine(e){
      work?" question from the other direction. A toast, not an alert: nothing is needed from
      her, and the thing she asked for has already happened. */
   if (e.type === 'HELP_CLEAR' && (e.payload || {}).how === 'desk' && e.who !== S.tech){
-    toast(esc(e.who) + ' marked it taken care of.', null, ICON.check);
+    toast(e.who + ' marked it taken care of.', null, ICON.check);
     return false;
   }
   if (e.who === S.tech || e.type.indexOf('HELP') === 0) return false;
@@ -2718,7 +2718,7 @@ function applyNews(news, since){
     if (x.type === 'HELP_ACK'){ S.help.ack = { by:x.who, atMs:Date.now() }; changed = true; }
     if (x.type === 'HELP_CLEAR'){
       HELP_PEND = null; S.help = null; keepAwake(false); changed = true;
-      toast(esc(x.who) + ' marked it taken care of.', null, ICON.check);
+      toast(x.who + ' marked it taken care of.', null, ICON.check);
     }
   });
   if (changed) render();
@@ -2791,7 +2791,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '690df3b52fbc';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'f19d36c2a35e';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
