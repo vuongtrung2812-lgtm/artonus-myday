@@ -157,6 +157,9 @@
   .kind.on{border-color:var(--gold);background:var(--gold-soft)}
   .kind.warn.on{border-color:var(--err);background:var(--err-soft)}
   .kind.warn.on b{color:var(--err)}
+  /* The visit is closed. Quiet and green, not another thing to act on. */
+  .card.done{background:var(--ok-soft);border-color:var(--ok)}
+  .card.done h3{color:var(--ok)}
   .endblk{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
   .endhd{font-family:'Cormorant Garamond',Georgia,serif;font-size:19px;font-weight:700;
     color:var(--espresso);margin-bottom:var(--s1)}
@@ -428,7 +431,7 @@ var ICON = {
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
 var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{}, mtDraft:'',
-          card:null, thumbs:null, missing:null, seatMode:true,
+          card:null, thumbs:null, missing:null, seatMode:true, rated:false,
           key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
@@ -727,6 +730,7 @@ function openVisit(key){
   /* S.missing belongs to ONE visit. Left behind it would tell the next client's screen that
      her photographs were already taken. */
   S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; PHOTO_DONE = {};
+  S.rated = false;
   S.mtDraft = ''; S.view = 'visit';
   /* Decided here and nowhere else — see the note in chairCard. Optimistic on open: a visit
      whose before photo is already taken corrects itself when the card lands, ONCE, before
@@ -790,10 +794,24 @@ function viewVisit(){
 
   h += cardHtml();
 
+  /* ══ THE WORK CARD GOES WHEN THE WORK IS DONE ═════════════════════════════════════════
+     Trung, 17 August: 'when the technician have done giving a rating, the in the chair should
+     go away, because the clients card is updated with their rating, and it is shown already,
+     so the in the chair is done, no need to show it again.'
+
+     Every control on it is spent by then — the photographs are taken, the ticket is closed,
+     the rating is written and is showing on the card above. Leaving it up meant a screenful
+     of live buttons on a visit that is over: time she cannot ask for, a service she cannot
+     change, a finish button for something already finished. */
+  var rated = !!(S.rated || (S.card && S.card.rated));
   if (v.state === 'booked'){
     h += '<div class="card"><h3>They are not in the chair yet</h3>'
       + '<p class="lede">Tap when they sit down. The front desk sees it straight away.</p>'
       + '<button class="btn" id="seat">They are in the chair</button></div>';
+  } else if (v.state === 'finished' && rated){
+    /* Nothing to do, and it says so once instead of showing twelve controls that cannot. */
+    h += '<div class="card done"><h3>All done</h3>'
+      + '<p class="lede">Everything is on their card. Nothing left to send.</p></div>';
   } else {
     h += chairCard(v);
   }
@@ -1913,6 +1931,9 @@ function openRating(){
                           mkCls: mkCls }).then(function(r){
         /* The rating saved even if the flag did not — say which, rather than a blanket
            "saved" over a must-know that never landed. */
+        /* Held locally too: a walk-in with no number has no card for S.card.rated to live on,
+           and without this her screen would keep the whole work card up for ever. */
+        S.rated = true;
         if (r && r.mustKnowError) toast('Rating saved. The must-know did not: '
                                         + r.mustKnowError, 'err');
         shutVeil(); toast('Saved. Thank you.', null, ICON.check);
@@ -2791,7 +2812,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'f19d36c2a35e';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '6dec67e166a4';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
