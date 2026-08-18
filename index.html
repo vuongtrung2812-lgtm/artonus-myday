@@ -1703,7 +1703,12 @@ function openAddon(){
        "(pedicure)" in the label — so a manicure chair was shown Gel and Removal, which mean
        something else there, and the parenthetical rode along onto the desk's ticket. */
     var fam = /pedicure/i.test(String((S.visit && S.visit.svc) || '')) ? 'pedicure' : 'manicure';
-    var list = (m.addons||[]).filter(function(a){ return !a.family || a.family === fam; });
+    /* 'both' shows in every chair — the art tiers and the fixes cost the same on a hand or a
+       foot. Only the hard removal is manicure-only. Without this the whole list would have
+       vanished the moment the real prices went in, because nothing is tagged 'manicure' any
+       more except that one row. */
+    var list = (m.addons||[]).filter(function(a){
+      return !a.family || a.family === 'both' || a.family === fam; });
     var qid = function(n){ return 'q_' + String(n).replace(/\W/g,''); };
 
     function paint(){
@@ -3160,7 +3165,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'b3d7039191c0';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '88d35760d056';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
