@@ -167,5 +167,66 @@ check('\u2b50 no photo picker forces the camera — the library is always an opt
   return found.length ? found.length + ' found - ' + found.join(' | ') : true;
 });
 
+check('\u2b50 American spelling, everywhere a person reads it', () => {
+  /* Trung, 18 August: "why do you use colour instead of color? I want you to use color, lock
+     this." The salon is in New York. The server has said `Color` since the close-out gate was
+     written; the British spelling was mine, and I even normalised the American one INTO it,
+     which is backwards.
+
+     A rule I have to remember is a rule I will break, so it is a test. */
+  const BRITISH = [
+    ['colour', 'color'], ['grey', 'gray'], ['favourite', 'favorite'],
+    ['behaviour', 'behavior'], ['centre', 'center'], ['organise', 'organize'],
+    ['organised', 'organized'], ['realise', 'realize'], ['recognise', 'recognize'],
+    ['apologise', 'apologize'], ['licence', 'license'], ['defence', 'defense'],
+    ['offence', 'offense'], ['programme', 'program'], ['catalogue', 'catalog'],
+    ['jewellery', 'jewelry'],
+    /* 'cancelled' and 'travelling' are left off: both are ordinary in American English and
+       Merriam-Webster lists them, so failing on them would change live wording nobody asked
+       to change. */
+  ];
+  /* THE SOURCE, not copy(). copy() only keeps strings that look like sentences — it needs a
+     space in them — so a one-word button reading "Colour" walked straight through the first
+     version of this check. These words appear in no identifier in this codebase, so scanning
+     the code directly is both safe and complete. Comments are stripped: the note explaining
+     which spelling is wrong must not be the thing that fails. */
+  const found = [];
+  FILES.forEach((file) => {
+    const code = stripComments(fs.readFileSync(path.join(APPS, file), 'utf8'))
+      /* READING old data is not writing new words. Photos were labelled while the picker
+         briefly said Colour and those rows are still in the book, so the comparison against
+         the old spelling has to stay. Only the comparison — it is never shown that way. */
+      .replace(/===?\s*['"](?:colour|Colour)['"]/g, '');
+    BRITISH.forEach(([wrong, right]) => {
+      const m = code.match(new RegExp('\\b' + wrong + '\\b', 'gi'));
+      if (m) found.push(file.split('/')[0] + ': "' + m[0] + '" should be "' + right
+                        + '" (' + m.length + ')');
+    });
+  });
+  return found.length ? found.length + ' found - ' + found.slice(0, 4).join(' | ') : true;
+});
+
+check('\u2b50 every icon a screen asks for actually exists', () => {
+  /* THE THIRD TIME THIS HAS SHIPPED. ICON.clock on the desk printed the literal word
+     "undefined" in front of every booking tip; ICON.book on the phone printed it in front of
+     "Their past visits". A missing icon is not a blank space — the name resolves to undefined
+     and JavaScript prints that word straight onto the screen, next to real copy, where it
+     looks like a crash. */
+  const found = [];
+  FILES.forEach((file) => {
+    const src = stripComments(fs.readFileSync(path.join(APPS, file), 'utf8'));
+    const decl = src.match(/var ICON = \{([\s\S]*?)\n\};/);
+    if (!decl) { found.push(file.split('/')[0] + ': no ICON table at all'); return; }
+    const have = new Set((decl[1].match(/^\s*([a-z]+)\s*:/gm) || [])
+      .map((x) => x.replace(/[^a-z]/g, '')));
+    const used = new Set(src.match(/ICON\.([a-zA-Z]+)/g) || []);
+    used.forEach((u) => {
+      const name = u.slice(5);
+      if (!have.has(name)) found.push(file.split('/')[0] + ': ICON.' + name);
+    });
+  });
+  return found.length ? found.length + ' missing - ' + found.join(' | ') : true;
+});
+
 console.log('\n  ' + pass + ' passed · ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

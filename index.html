@@ -288,7 +288,7 @@
   .vnote .acts button::after{content:'';position:absolute;top:-15px;right:-9px;bottom:-15px;left:-9px}
   .vnote .acts svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;
     stroke-linecap:round;stroke-linejoin:round;flex:none}
-  /* Gold, never red. Red is the must-know colour and a booking tip is not a warning. */
+  /* Gold, never red. Red is the must-know color and a booking tip is not a warning. */
   .vnote .band{margin:-11px -14px 13px;padding:10px 14px 10px 11px;background:var(--gold-soft);
     border-bottom:1px solid var(--gold);border-left:3px solid var(--gold)}
   .vnote .band .b{display:flex;gap:10px;align-items:baseline;font-size:13.5px;line-height:1.45}
@@ -337,6 +337,13 @@
   .vnote .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 11px}
   .vnote .chip{font-size:11.5px;font-weight:700;color:var(--ink);border:1px solid var(--line);
     border-radius:999px;padding:3px 9px;line-height:1.3;background:none}
+  /* A quiet way between the two halves of the screen. Full width so a thumb cannot miss it. */
+  .jump{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
+    min-height:44px;margin:0 0 var(--s2);padding:0 14px;border:1px solid var(--line);
+    border-radius:12px;background:var(--card);font-family:inherit;font-size:13px;
+    font-weight:800;color:var(--muted);touch-action:manipulation}
+  .jump svg{width:14px;height:14px;stroke:var(--gold);fill:none;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round}
   .nshots{display:flex;gap:var(--s1);margin-top:var(--s2);flex-wrap:wrap}
   .nshots img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);
     background:var(--line)}
@@ -537,7 +544,7 @@ function money(n){ return '$' + (Math.round((Number(n)||0)*100)/100).toFixed(2);
 
 var TOASTT;
 /* The message is ESCAPED. This used to set innerHTML straight from the argument, and most
-   callers pass server text — every toast(e.message,'err'), the colour label, the service
+   callers pass server text — every toast(e.message,'err'), the color label, the service
    name. A shade typed as markup would have run as markup. Our own icon markup goes in the
    third argument, the only thing allowed through unescaped. */
 function toast(m,kind,icon){
@@ -915,6 +922,11 @@ function viewVisit(){
     + '</div>';
 
   h += cardHtml();
+  /* One tap to the notes and one tap back. The work is on top now, so the past is the thing
+     that needs a shortcut. */
+  if (S.card && S.card.ok && (S.card.visits || []).length)
+    h += '<button class="jump" onclick="jumpTo(\'profile\')">'
+       + ICON.search + 'Their past visits · ' + (S.card.visits || []).length + '</button>';
 
   /* ══ THE WORK CARD GOES WHEN THE WORK IS DONE ═════════════════════════════════════════
      Trung, 17 August: 'when the technician have done giving a rating, the in the chair should
@@ -939,6 +951,9 @@ function viewVisit(){
   } else {
     h += chairCard(v);
   }
+  /* THE PROFILE LAST. Reference, not work — and with a dozen visits on a regular it used to
+     push every control she needs mid-service a screen and a half down the page. */
+  h += profileHtml();
   h += dockHtml();
   paintInto('app', h);
   if ($('seat')) $('seat').onclick = function(){ sig('SEATED', {}, 'seat'); };
@@ -1153,7 +1168,46 @@ function cardHtml(){
      worked on — and the heading said Must-knows, which is the red cards above. So a client
      with no standing chips showed an empty box titled Must-knows directly under a real
      must-know, which reads as one going missing. */
-  h += '<div class="card"><h3>In their profile</h3><div class="chips">'
+  return h;
+}
+
+/**
+ * THE PROFILE, BELOW THE WORK.
+ *
+ * Trung, 18 August: "since the client's profile is on top of the Session, if there are a lot
+ * of notes I will have to scroll so far down to access the session."
+ *
+ * He is right about the order. A regular with a dozen visits pushed every control she needs
+ * mid-service — more time, almost done, the add-ons — a screen and a half down the page.
+ * Must-knows stay above the work, because an allergy is read before anyone starts. The
+ * profile and its notes are reference: they sit under the session, and a jump reaches them.
+ */
+/**
+ * Go to a block, and ALWAYS ACTUALLY GO.
+ *
+ * `behavior:'smooth'` is ignored outright when the phone has Reduce Motion turned on — a
+ * common setting, and not a rare one in a salon. The button then does nothing at all, which
+ * is the exact failure this app keeps being caught by. So the smooth glide is the nice
+ * version and the plain jump is the guarantee: if the page has not moved a moment later,
+ * it is moved.
+ */
+function jumpTo(id){
+  var el = $(id);
+  if (!el) return;
+  var se = document.scrollingElement || document.documentElement;
+  var was = se.scrollTop;
+  var want = Math.max(0, was + el.getBoundingClientRect().top - 8);
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  setTimeout(function(){
+    if (Math.abs(se.scrollTop - was) < 4) se.scrollTop = want;
+  }, 220);
+}
+
+function profileHtml(){
+  var c = S.card;
+  if (!c || !c.ok) return '';
+  var h = '<button class="jump" onclick="jumpTo(\'app\')">' + ICON.back + 'Back to the session</button>';
+  h += '<div class="card" id="profile"><h3>In their profile</h3><div class="chips">'
     + ((c.standing||[]).length ? c.standing.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')
        : '<span class="quiet">Nothing yet.</span>')
     + '</div>';
@@ -1168,7 +1222,9 @@ function cardHtml(){
               var id  = (x && x.id) ? x.id : x;
               var lab = (x && x.label) ? String(x.label) : '';
               var k = lab.toLowerCase();
-              if (k === 'color') k = 'colour';
+              /* Photos labelled while the picker briefly said Colour are still in the book, so
+                 the British spelling is accepted as INPUT and never shown. */
+              if (k === 'colour') k = 'color';
               if (k === 'design' || k === 'design reference') k = 'reference';
               return { id:id, label:lab, kind: SHOT_RANK.hasOwnProperty(k) ? k : (lab?'custom':''), i:i };
             })
@@ -1240,10 +1296,10 @@ var PICKER_OPEN = false;
  * whoever photographed it. Asked before the camera opens, because afterwards nobody goes back
  * and labels anything.
  */
-/* Before → After → Colour → Reference → whatever somebody typed → unlabelled. The same
+/* Before → After → Color → Reference → whatever somebody typed → unlabelled. The same
    sequence the desk uses, so one visit reads the same on either screen. */
-var SHOT_RANK = { before: 0, after: 1, colour: 2, reference: 3 };
-var SHOT_CAP  = { before: 'Before', after: 'After', colour: 'Colour', reference: 'Reference' };
+var SHOT_RANK = { before: 0, after: 1, color: 2, reference: 3 };
+var SHOT_CAP  = { before: 'Before', after: 'After', color: 'Color', reference: 'Reference' };
 function shotRank(x){ return SHOT_RANK.hasOwnProperty(x.kind) ? SHOT_RANK[x.kind] : (x.kind ? 4 : 5); }
 function shotCap(x){ return SHOT_CAP.hasOwnProperty(x.kind) ? SHOT_CAP[x.kind] : (x.label || ''); }
 /* Five stars, only the earned ones filled. The old line sliced a string of solid stars, so a
@@ -1258,7 +1314,7 @@ function askShotLabel(then){
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>What is this a photo of?</h3>'
     + '<div class="labelpick">'
-    + ['Before','After','Colour','Design','Other'].map(function(l){
+    + ['Before','After','Color','Design','Other'].map(function(l){
         return '<button class="lbtn" data-lab="' + l + '">' + l + '</button>'; }).join('')
     + '</div>'
     + '<button class="skip" style="width:100%" onclick="shutVeil()">Cancel</button></div>';
@@ -1693,7 +1749,7 @@ function openAddon(){
     };
   });
 }
-/* Which of the three are in the air right now. Per LABEL, so Before, After and Colour can be
+/* Which of the three are in the air right now. Per LABEL, so Before, After and Color can be
    uploading at the same time without knowing about each other — a technician does not take
    three photographs and wait politely between them. */
 var PHOTO_UP = {};
@@ -2071,7 +2127,7 @@ function openRating(){
 
          Five chips were the only five bad afternoons anyone thought of in advance. A three-star
          visit that was none of them — a nail lifted on the way out, a client unhappy with a
-         colour she chose herself — had to be filed under whichever chip was least wrong, and
+         color she chose herself — had to be filed under whichever chip was least wrong, and
          the next person read a label that did not describe what happened. The last of the
          tap-a-word lists on this screen; the note, the tips and the must-know all became boxes
          first, and this is the one that most needed to be one. */
@@ -3055,7 +3111,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2c1594d824b5';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'f4ada00765e3';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
