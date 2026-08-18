@@ -428,6 +428,7 @@ var ICON = {
 var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d32d08a8~mv2.png/v1/fill/w_192,h_192,lg_1,usm_0.66_1.00_0.01/1193d9_5794966292134434911d79c3d32d08a8~mv2.png';
 
 var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{}, mtDraft:'',
+          card:null, thumbs:null, missing:null, seatMode:true,
           key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
@@ -727,14 +728,43 @@ function openVisit(key){
      her photographs were already taken. */
   S.card = null; S.thumbs = null; S.missing = null; PHOTO_UP = {}; PHOTO_DONE = {};
   S.mtDraft = ''; S.view = 'visit';
+  /* Decided here and nowhere else — see the note in chairCard. Optimistic on open: a visit
+     whose before photo is already taken corrects itself when the card lands, ONCE, before
+     she has had time to reach for anything. */
+  S.seatMode = true;
   render();
   /* Her card is a second read on purpose: the day list must paint instantly, and the card is
      the expensive part. A walk-in with no number has no card at all, and says so. */
+  if (S.visit && S.visit.nameOnly){
+    /* NO CARD, BUT THE PHOTOGRAPHS ARE STILL THE SERVER'S. Without this, re-opening a
+       phone-less walk-in showed all three tiles red even though all three were saved — and
+       the finish button asked for photographs that already existed. */
+    var sw = ++S.session, kw = key;
+    api('techPhotos', { token:S.token, key:kw }).then(function(r){
+      if (S.session !== sw || S.key !== kw) return;
+      var have = (r && r.photos) || {};
+      REQ.forEach(function(l){ if (have[l]) PHOTO_DONE[l] = true; });
+      S.thumbs = S.thumbs || {};
+      Object.keys(have).forEach(function(l){ if (!PHOTO_UP[l]) S.thumbs[l] = have[l]; });
+      if (have['Before']) S.seatMode = false;
+      render();
+    })['catch'](function(){});
+  }
   if (S.visit && !S.visit.nameOnly){
     var s = ++S.session;
     api('techClient', { token:S.token, key:key }).then(function(c){
       if (S.session !== s || S.key !== key) return;
-      S.card = c; S.missing = null; render(); loadThumbs();
+      /* S.missing is only cleared when the card is NEWER than what the photos told us. The
+         card is fetched once when the visit opens; a photograph taken since knows better. */
+      S.card = c;
+      /* The one moment the phase is allowed to change: the card has just told us whether the
+         before photo was already taken, and she has not touched anything yet. */
+      S.seatMode = !((c && c.photos && c.photos['Before']));
+      if (!Object.keys(PHOTO_DONE).length) S.missing = null;
+      /* WHAT THE SERVER ALREADY HAS. Re-opening a visit used to show every tile red again,
+         because PHOTO_DONE is wiped on open and only this phone's own uploads refilled it. */
+      REQ.forEach(function(l){ if (c && c.photos && c.photos[l]) PHOTO_DONE[l] = true; });
+      render(); loadThumbs();
     })['catch'](function(e){ S.cardErr = e.message; render(); });
   }
 }
@@ -796,7 +826,18 @@ function chairCard(v){
      at the end. */
   var h = '<div class="card"><h3>In the chair</h3>';
   var got = (S.card && S.card.photos) || {};
-  var atTheSeat = !got['Before'];
+  /* ══ THE ROW DOES NOT MOVE DURING A VISIT ═════════════════════════════════════════════
+     This was `!got['Before']`, read fresh on every render — so the moment the before photo
+     landed the whole photo row LEFT the top of the card and reappeared several hundred pixels
+     down inside "Before you finish". Measured on a 390x844 screen: it travels 461px on the
+     first photograph and 890px when the card is re-opened, from on-screen to below the fold.
+     Worse, the +10/+15/+30 buttons slide up into the pixels the tiles just vacated — a finger
+     already descending toward the After tile lands on a live "ask the desk for more time".
+
+     The phase is decided ONCE, when the visit opens, and held for as long as she is on it.
+     Taking the before photo no longer rearranges the screen underneath her hand; the row
+     stays where she last saw it until she leaves and comes back. */
+  var atTheSeat = !!S.seatMode;
 
   /* AT THE SEAT. The before photo is the only one that can be taken now, and it is the one
      the whole record depends on — there is no second chance at what the hands looked like
@@ -1023,6 +1064,8 @@ var SHOT_CACHE = {}, SHOT_BUSY = {}, SHOT_PEND = {}, SHOT_N = 0;
 /* Which of the three this phone has successfully sent for the visit on screen. Independent of
    the card, because a walk-in with no number does not have one. */
 var PHOTO_DONE = {};
+/* True from the moment the OS picker is opened until it closes or is backed out of. */
+var PICKER_OPEN = false;
 
 function wireShots(root){
   Array.prototype.forEach.call(root.querySelectorAll('[data-shot]'), function(img){
@@ -1459,12 +1502,20 @@ function paintPhotos(){
 
 /* One round trip for all three thumbnails when the card opens. Drive's own small rendition
    is a few kilobytes, so this costs less than the card itself. */
+/* MERGED, NEVER REPLACED. This assigned S.thumbs wholesale, so a photograph still travelling
+   — whose only copy is the one this phone is holding — vanished from the tile the moment the
+   server's older answer arrived. */
 function loadThumbs(){
   if (!S.key || !S.card || !Object.keys(S.card.photos||{}).length) return;
   var s = ++S.session, key = S.key;
   api('techPhotos', { token:S.token, key:key }).then(function(r){
     if (S.session !== s || S.key !== key) return;
-    S.thumbs = r.photos || {}; render();
+    /* MERGED. Assigning wholesale wiped the local copy of a photograph still going up — the
+       only copy that exists until the server has it. */
+    var have = r.photos || {};
+    S.thumbs = S.thumbs || {};
+    Object.keys(have).forEach(function(l){ if (!PHOTO_UP[l]) S.thumbs[l] = have[l]; });
+    render();
   })['catch'](function(){});
 }
 function openShot(label){
@@ -1516,8 +1567,31 @@ function takePhoto(label){
      Without it the OS offers the choice: Photo Library, Take Photo, Choose File. Taking the
      photo is still what we want her to do; blocking every other route was never the point. */
   i.type='file'; i.accept='image/*';
+  /* IN THE DOCUMENT, NOT FLOATING. A detached input can be collected while the OS camera is
+     up, and iOS then has nothing to fire `change` at when she comes back with the photo —
+     the tap simply does nothing and she takes it again. Hidden, appended, removed after. */
+  i.style.position = 'fixed'; i.style.left = '-9999px'; i.style.opacity = '0';
+  document.body.appendChild(i);
+  PICKER_OPEN = true;
+  var closePicker = function(){
+    PICKER_OPEN = false;
+    if (i.parentNode) { try { i.parentNode.removeChild(i); } catch (e) {} }
+  };
+  /* If she backs out of the camera, `change` never comes. focus returning to the window is
+     the only signal there is; without this the reload guard would stay shut for ever. */
+  window.addEventListener('focus', function once(){
+    window.removeEventListener('focus', once);
+    setTimeout(function(){ if (!(i.files && i.files[0])) closePicker(); }, 1200);
+  });
   i.onchange = function(){
+    closePicker();
     var f = i.files && i.files[0]; if (!f) return;
+    /* A zero-byte file is an iCloud photo the phone has not finished downloading, not a
+       broken one. Saying "could not be read" sends her to retake a photograph that is fine. */
+    if (typeof f.size === 'number' && f.size === 0){
+      toast('That photo is still downloading from iCloud. Give it a moment.', 'err');
+      return;
+    }
     /* ON SCREEN NOW, straight from the file, before the shrink and long before the server.
        shrink() alone is most of a second on a 12-megapixel photograph, and the upload is
        another one or two — so the old code left her looking at an unchanged red REQUIRED
@@ -1532,19 +1606,28 @@ function takePhoto(label){
     /* A photograph this phone cannot read must give the slot back, not hold it for ever. */
     var giveUp = function(){
       PHOTO_UP[label] = false;
+      if (S.key !== key) return;               // a different client is on screen now
       if (S.thumbs) delete S.thumbs[label];
       paintPhotos();
       toast('That photo could not be read. Take it again.', 'err');
     };
 
     shrink(f, function(dataUrl){
+      /* SHE MAY HAVE MOVED ON DURING THE SHRINK — a second on a big photograph, and openVisit
+         nulls S.thumbs. This threw a TypeError that the catch above reported to her as "that
+         photo could not be read", about a photograph that was perfectly fine. */
+      if (S.key !== key) return;
       /* Keep the shrunk copy: it is what the server will hold, and having it here means the
          tile never has to be fetched back. */
+      S.thumbs = S.thumbs || {};
       S.thumbs[label] = dataUrl;
       if (PHOTO_UP[label]) paintPhotos();
       api('techPhoto', { token:S.token, key:key, label:label, data:dataUrl }).then(function(r){
-        PHOTO_UP[label] = false;
+        /* THE GUARD COMES FIRST. PHOTO_UP was cleared before it, so an upload finishing after
+           she had moved to the next client cleared THAT client's slot — a tile going quietly
+           from "Adding…" back to red REQUIRED on a visit whose photograph was never taken. */
         if (S.key !== key) return;              // she moved on; the photo is still saved
+        PHOTO_UP[label] = false;
         /* MERGE, never replace. r.photos is this execution's view of the visit, and a photo
            that went up while this one was travelling is not in it — assigning the whole
            object would erase the other two slots she just filled. */
@@ -1579,8 +1662,11 @@ function takePhoto(label){
            already holding, and it bumps S.session, which cancels the card fetch that a
            second photograph started. That is most of "it does not work back to back". */
       })['catch'](function(e){
+        if (S.key !== key) return;              // not this client's screen any more
         PHOTO_UP[label] = false;
-        if (S.thumbs) delete S.thumbs[label];
+        /* Only if THIS attempt is still the one on screen. A retake already going up must not
+           have its preview wiped by the failure of the one it replaced. */
+        if (S.thumbs && S.thumbs[label] === dataUrl) delete S.thumbs[label];
         paintPhotos();
         toast(e.message,'err');
       });
@@ -2699,7 +2785,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '96e451239696';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '81b35de3a2ca';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -2732,6 +2818,13 @@ function checkBuild(){
 
 function safeToReload(){
   if (INFLIGHT > 0) return false;                                  // a call is still in the air
+  /* A PHOTOGRAPH IS IN PROGRESS. INFLIGHT only counts requests, and the two slowest parts of
+     taking a photo make none: the OS camera being open, and the shrink. checkBuild fires five
+     seconds after the app opens — which is exactly when the first before photo is being taken
+     — and a reload there throws the pick away with no trace. That is most of "the cold start
+     and the taking photos, I have to try multible times for it to go through". */
+  if (PICKER_OPEN) return false;
+  for (var i = 0; i < REQ.length; i++) if (PHOTO_UP[REQ[i]]) return false;
   var v = $('veil'), av = $('alertveil');
   if (v && v.className.indexOf('on') >= 0) return false;           // a dialog is open
   if (av && av.className.indexOf('on') >= 0) return false;         // an alert is up, unread
