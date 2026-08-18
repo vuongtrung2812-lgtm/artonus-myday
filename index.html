@@ -300,7 +300,13 @@
     stroke-linecap:round;stroke-linejoin:round}
   /* The plates bleed to the card edge, so the cut plate at the edge says there is more. */
   .vnote .plates{margin:0 -14px 13px}
-  .vnote .pstrip{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;
+  .vnote .pstrip{display:flex;gap:10px;overflow-x:auto;/* MANDATORY, not proximity. Proximity only snaps when the flick happens to end near a
+       plate edge, so roughly a third of them settled a few dozen pixels off and the strip
+       looked misaligned for no reason a person could see. Every flick lands on a plate. */
+    scroll-snap-type:x mandatory;
+    /* WITHOUT THIS the snap lands a plate against the container edge and the strip's own
+       padding then hides part of it — every flick settled slightly off. */
+    scroll-padding-left:14px;
     padding:0 14px 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .vnote .pstrip::-webkit-scrollbar{display:none}
   .plate{position:relative;flex:none;width:126px;scroll-snap-align:start;display:block;
@@ -308,10 +314,13 @@
     touch-action:manipulation}
   .plate img{display:block;width:126px;aspect-ratio:4/5;object-fit:cover;border-radius:8px;
     border:1px solid var(--line);background:var(--gold-soft)}
+  /* ONE STYLE FOR EVERY CAPTION. The design set Before and After in small caps and everything
+     else in sentence case, on the argument that two shapes separate the words the eye
+     confuses. On the real screen it just reads as two fonts that do not match. Emphasis is
+     carried by ink alone now, which was always the stronger half of the idea. */
   .plate .cap{display:block;height:14px;margin-top:7px;line-height:14px;color:var(--muted);
-    font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .plate[data-kind="before"] .cap,.plate[data-kind="after"] .cap{
-    font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase}
+    font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .plate[data-kind="after"] .cap{color:var(--espresso)}
   .plate[data-kind="before"]+.plate[data-kind="after"]{margin-left:-5px}
   .plate.wait img{animation:shotpulse 1.6s ease-in-out infinite}
@@ -3041,7 +3050,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '8d62ee8c3c8d';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '89e9b82d97cf';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
