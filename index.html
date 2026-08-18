@@ -998,11 +998,11 @@ function wireSubtabs(){
       var want = b.getAttribute('data-tab');
       if (want === S.tab) return;
       S.tab = want;
-      /* Back to the top: the two tabs are different lengths, and landing halfway down the
-         other one reads as the app losing its place. */
-      var se = document.scrollingElement || document.documentElement;
+      /* NO FORCED SCROLL. I added one on the reasoning that the two tabs are different
+         lengths — and it throws away the position of somebody who scrolled down deliberately,
+         which is worse than the problem. She just tapped the tab bar, so it is on screen; the
+         browser keeps it there on its own. */
       render();
-      se.scrollTop = 0;
     };
   });
 }
@@ -3160,7 +3160,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '82f218f1716d';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'b3d7039191c0';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
