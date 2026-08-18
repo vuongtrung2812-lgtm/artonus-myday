@@ -1343,7 +1343,12 @@ function wireShots(root){
       var noteId = b.getAttribute('data-addshot');
       askShotLabel(function(shotLabel){
       var i = document.createElement('input');
-      i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
+      /* NO `capture`. Setting it forces the lens and HIDES THE PHOTO LIBRARY — on iOS the
+         picker opens straight into the camera with no way out. A technician regularly has the
+         photograph already: taken a moment ago between clients, sent by the client, or saved
+         as a reference. This is the third time this attribute has been added to this app and
+         the last: _test_words.js fails the build if it comes back. */
+      i.type = 'file'; i.accept = 'image/*';
       i.onchange = function(){
         var f = i.files && i.files[0]; if (!f) return;
         b.disabled = true; b.textContent = 'Adding…';
@@ -3050,7 +3055,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '89e9b82d97cf';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2c1594d824b5';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){

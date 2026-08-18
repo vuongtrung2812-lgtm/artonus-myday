@@ -21,11 +21,27 @@ function check(name, fn) {
   else { fail++; console.log('  FAIL  ' + name + '  → ' + r); }
 }
 
+/**
+ * Comments out, CODE INTACT.
+ *
+ * The plain `/*` ... `*` `/` strip is wrong on this codebase and it was quietly weakening every
+ * check in this file. `accept = 'image/*'` contains the two characters that open a comment, so
+ * the stripper treated the rest of the line as comment text and ran to the next real close —
+ * swallowing whatever code sat between. It is how a deliberately reintroduced `capture` passed
+ * a test written to catch exactly that.
+ *
+ * A real comment opens at the start of a line or after whitespace or punctuation. Inside
+ * `image/*` the slash follows a letter, so requiring that boundary is enough.
+ */
+function stripComments(src) {
+  return src.replace(/(^|[\s;{}()=,])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.*$/gm, '');
+}
+
 /* Strings a person actually reads. Comments stripped; class names, ids, selectors and event
    names skipped — they are code that happens to be quoted. */
 function copy(file) {
   let src = fs.readFileSync(path.join(APPS, file), 'utf8');
-  src = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  src = stripComments(src);
   const out = [];
   const push = (t) => {
     if (!/[a-z]{2}\s+[a-z]{2}/i.test(t)) return;          // not a sentence
@@ -128,6 +144,27 @@ check('⭐ no sentence on a screen runs past 22 words', () => {
     });
   }));
   return hits.length === 0 || hits.length + ' found — ' + hits.slice(0, 3).join(' | ');
+});
+
+check('\u2b50 no photo picker forces the camera — the library is always an option', () => {
+  /* Trung, 18 August: "Every time we have photo feature you have to let people select from
+     the library. Lock this, you keep building this feature and only let me take photo."
+
+     `capture` on a file input forces the lens and HIDES the photo library — on iOS the picker
+     opens straight into the camera with no way out. It has been added to this app three times
+     now, each time by someone reasoning that a salon photo is taken on the spot. Often it is
+     not: it was taken a moment ago between clients, sent by the client, or saved as a
+     reference. This is the rule, not a preference, so it is a test and not a comment. */
+  const found = [];
+  FILES.forEach((file) => {
+    /* The real code, comments stripped — the note explaining WHY there is no capture must not
+       itself trip the check. */
+    const code = stripComments(fs.readFileSync(path.join(APPS, file), 'utf8'));
+    const re = /\.capture\s*=|capture\s*=\s*["'](?:camera|environment|user)["']|<input[^>]*\scapture[\s=>]/gi;
+    let m;
+    while ((m = re.exec(code))) found.push(file.split('/')[0] + ': ' + m[0].trim());
+  });
+  return found.length ? found.length + ' found - ' + found.join(' | ') : true;
 });
 
 console.log('\n  ' + pass + ' passed · ' + fail + ' failed\n');
