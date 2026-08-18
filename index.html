@@ -1884,14 +1884,24 @@ function openRating(){
       + '<textarea class="ta" id="rmk" rows="2" '
       + 'placeholder="Something every technician has to know, every visit."'
       + '>' + esc(mkVal) + '</textarea>'
-      + (mkVal.trim()
-          ? '<button type="button" class="rchip' + (mkCls === 'allergy' ? ' on' : '') + '" '
-            + 'id="rmkallergy" style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
-            + '<p class="hint" style="margin:-2px 0 var(--s2)">It stays in their profile until '
-            + 'somebody takes it off, and every technician is asked to tap <b>I&rsquo;ve read '
-            + 'this</b>.' + (mkCls === 'allergy' ? ' An allergy also shows in red at the top.' : '')
-            + '</p>'
-          : '')
+      /* ══ ALWAYS DRAWN, JUST HIDDEN ═══════════════════════════════════════════════════
+         Trung, 17 August: 'after the first letter the text line move to the first spot again
+         and the text is messed up.'
+
+         This block used to APPEAR with the first character, which meant repainting the sheet
+         mid-word. The textarea was destroyed and rebuilt, and focus() puts the caret at the
+         start — so the second letter landed in front of the first and everything after it
+         went in backwards.
+
+         Nothing is rebuilt now. The block is always in the page and simply shown or hidden,
+         so the box she is typing in is never replaced and the caret never moves. */
+      + '<div id="rmkmore"' + (mkVal.trim() ? '' : ' hidden') + '>'
+      + '<button type="button" class="rchip' + (mkCls === 'allergy' ? ' on' : '') + '" '
+      + 'id="rmkallergy" style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
+      + '<p class="hint" style="margin:-2px 0 var(--s2)">It stays in their profile until '
+      + 'somebody takes it off, and every technician is asked to tap <b>I&rsquo;ve read '
+      + 'this</b>. <span id="rmkred"' + (mkCls === 'allergy' ? '' : ' hidden')
+      + '>An allergy also shows in red at the top.</span></p></div>'
       + '<div class="row2"><button class="skip" style="flex:1" onclick="shutVeil()">Not now</button>'
       /* LIVE, ALWAYS. A disabled button cannot tell her what it wants; pressing it now says so. */
       + '<button class="btn" id="rsave" style="flex:1">Save rating</button></div></div>';
@@ -1907,17 +1917,18 @@ function openRating(){
         else if (id === 'rtips') tipsVal = t.value;
         else if (id === 'rnote') noteVal = t.value;
         else {
-          var had = mkVal.trim().length > 0;
           mkVal = t.value;
-          /* The allergy toggle appears with the first character and goes with the last, so
-             repaint only on that edge — never on every keystroke, which would steal focus. */
-          if (had !== (mkVal.trim().length > 0)) { paint(); $('rmk').focus(); return; }
+          /* Shown or hidden in place. NEVER paint() — she is mid-word. */
+          var more = $('rmkmore');
+          if (more) more.hidden = !mkVal.trim();
         }
       };
     });
     if ($('rmkallergy')) $('rmkallergy').onclick = function(){
       mkCls = mkCls === 'allergy' ? 'other' : 'allergy';
-      paint(); $('rmk').focus();
+      /* In place, for the same reason: she may have the box open and half a sentence in it. */
+      this.className = 'rchip' + (mkCls === 'allergy' ? ' on' : '');
+      var red = $('rmkred'); if (red) red.hidden = mkCls !== 'allergy';
     };
     if ($('rsave')) $('rsave').onclick = function(){
       var missing = wants();
@@ -2812,7 +2823,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'bf06ae556853';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '39669d55cc98';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
