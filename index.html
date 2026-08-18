@@ -1578,11 +1578,18 @@ function svcHtml(v){
   if (!can('tech.serviceChange')) return '';
   return '<div class="lbl">What they are having</div>'
     + '<div class="note" style="margin-bottom:var(--s2)"><b>'+esc(v.svc||'—')+'</b>'
+    /* A SECOND SERVICE, listed beside the first. Someone having a manicure AND a pedicure
+       could not be recorded at all before: changing the service threw the first one away,
+       and an add-on is not a service. */
+    + ((v.extras&&v.extras.length)
+        ? v.extras.map(function(x){ return ' <b>+ '+esc(x.name||x)+'</b>'; }).join('')
+        : '')
     + (v.price?' · '+money(v.price):'')
     + ((v.addons&&v.addons.length)
         ? '<br><span class="quiet">'+v.addons.map(function(a){ return esc(a.label||a.name); }).join(' · ')+'</span>'
         : '')
     + '</div><div class="sigrow">'
+    + '<button class="sigbtn" onclick="openSvc(\'add\')">'+ICON.plus+'Add a service</button>'
     + '<button class="sigbtn" onclick="openSvc()">'+ICON.plus+'Change the service</button>'
     + '<button class="sigbtn" onclick="openAddon()">'+ICON.plus+'Add an add-on</button></div>';
 }
@@ -1603,14 +1610,19 @@ function withMenu(then){
    Both sheets keep the same shape now — a chosen row, a Send button that names what it is
    about to do, and Cancel meaning cancel. */
 var SVC_OP = '';
-function openSvc(){
+function openSvc(mode){
+  /* One sheet, two jobs. 'add' puts a second service on the ticket; anything else replaces
+     the one that is there. The list, the search and the send are identical, so building a
+     second sheet would only have been two places to fix the next bug in. */
+  var adding = mode === 'add';
   var picked = '';
   var GEN = ++SHEET_GEN;                            // see openAddon
   var mine = function(){ return GEN === SHEET_GEN; };
   var sending = false;                              // see openAddon — a repaint must not unlock
   SVC_OP = '';
   $('veil').className = 'veil on';
-  $('veil').innerHTML = '<div class="alert"><h3>Change the service</h3>'
+  $('veil').innerHTML = '<div class="alert"><h3>'
+    + (adding ? 'Add a service' : 'Change the service') + '</h3>'
     + '<input class="in" id="svcq" placeholder="Start typing&hellip;" autocomplete="off">'
     + '<div id="svclist" class="picklist"><p class="lede">Loading the menu&hellip;</p></div>'
     /* CANCEL LOCKS TOO. Leaving it live during a send is how the sheet got torn down from
@@ -1656,8 +1668,8 @@ function openSvc(){
       var to = picked;
       sending = true; paint();
       if (!SVC_OP) SVC_OP = opId('svc');
-      api('signal', { token:S.token, key:S.key, kind:'SVC_CHANGE', payload:{ to:to },
-                      opId: SVC_OP })
+      api('signal', { token:S.token, key:S.key, kind: adding ? 'SVC_ADD' : 'SVC_CHANGE',
+                      payload:{ to:to }, opId: SVC_OP })
         .then(function(){ sending = false; SVC_OP = '';
                           if (!mine()) return void toast('The desk has it — '+to);
                           shutVeil(); toast('The desk has it — '+to); refresh(true); })
@@ -3165,7 +3177,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '88d35760d056';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'bd239f32e1d3';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
