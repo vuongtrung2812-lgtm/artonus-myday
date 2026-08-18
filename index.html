@@ -1796,13 +1796,11 @@ function vocabGroups(){
  * on. And the booking tip below is the point of the whole screen: a star with no instruction
  * is a grudge, a star with "ninety minutes next time" is a salon that runs better.
  */
-var WHY = ['Ran past booked time', 'Changed design mid-service', 'Asked for redo',
-           'Arrived late', 'Damage to repair'];
 
 function openRating(){
   /* Held out here because tapping a star repaints the whole sheet, and a technician who typed
      the tip before choosing the stars would otherwise watch her words vanish. */
-  var stars = 0, why = {}, tipsVal = '', noteVal = '', mkVal = '', mkCls = 'other';
+  var stars = 0, whyVal = '', tipsVal = '', noteVal = '', mkVal = '', mkCls = 'other';
 
   function hint(){
     if (!stars) return 'Rate this visit — never the person.';
@@ -1814,8 +1812,8 @@ function openRating(){
      button was fixed for, which prints 'Still needed: …' rather than greying out in silence. */
   function wants(){
     if (!stars) return 'Pick the stars first.';
-    if (stars <= 3 && !Object.keys(why).length)
-      return 'Three stars or fewer needs a reason — pick at least one.';
+    if (stars <= 3 && !whyVal.trim())
+      return 'Three stars or fewer needs a reason — say what happened.';
     return '';
   }
   function ready(){ return !wants(); }
@@ -1828,10 +1826,20 @@ function openRating(){
             + 'style="min-width:52px;min-height:52px;justify-content:center;font-size:20px">'
             + (n<=stars?'★':'☆')+'</button>'; }).join('')+'</div>'
       + '<p class="hint" style="text-align:center;margin:0 0 10px">'+esc(hint())+'</p>'
+      /* ══ WHY, IN HER WORDS ═══════════════════════════════════════════════════════════
+         Trung, 17 August: 'replace the chips and make it a text box for why the rating is low.'
+
+         Five chips were the only five bad afternoons anyone thought of in advance. A three-star
+         visit that was none of them — a nail lifted on the way out, a client unhappy with a
+         colour she chose herself — had to be filed under whichever chip was least wrong, and
+         the next person read a label that did not describe what happened. The last of the
+         tap-a-word lists on this screen; the note, the tips and the must-know all became boxes
+         first, and this is the one that most needed to be one. */
       + (stars && stars<=3
-          ? '<div class="lbl">What made it that way? — pick at least one</div><div class="sigrow">'
-            + WHY.map(function(w){ return '<button class="rchip'+(why[w]?' on':'')+'" data-why="'+esc(w)+'">'
-                + esc(w)+'</button>'; }).join('')+'</div>' : '')
+          ? '<div class="lbl">What happened?</div>'
+            + '<textarea class="ta" id="rwhy" rows="3" placeholder="'
+            + 'e.g. The gel lifted on two nails and we redid them.">'+esc(whyVal)+'</textarea>'
+          : '')
       /* ══ TWO BOXES, TWO QUESTIONS ══════════════════════════════════════════════════════
          Trung, 17 August: 'replace the chips to a text box, and that section will be Booking
          tips. The lower section will be the note section.'
@@ -1871,16 +1879,14 @@ function openRating(){
       + '<button class="btn" id="rsave" style="flex:1">Save rating</button></div></div>';
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-star]'), function(b){
-      b.onclick = function(){ stars = Number(b.getAttribute('data-star')); why = {}; paint(); };
+      /* Her words survive a change of mind about the stars. They used to be thrown away. */
+      b.onclick = function(){ stars = Number(b.getAttribute('data-star')); paint(); };
     });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-why]'), function(b){
-      b.onclick = function(){ var w=b.getAttribute('data-why');
-        if (why[w]) delete why[w]; else why[w]=true; paint(); };
-    });
-    ['rtips','rnote','rmk'].forEach(function(id){
+    ['rwhy','rtips','rnote','rmk'].forEach(function(id){
       var t = $(id); if (!t) return;
       t.oninput = function(){
-        if (id === 'rtips') tipsVal = t.value;
+        if (id === 'rwhy') whyVal = t.value;
+        else if (id === 'rtips') tipsVal = t.value;
         else if (id === 'rnote') noteVal = t.value;
         else {
           var had = mkVal.trim().length > 0;
@@ -1900,7 +1906,7 @@ function openRating(){
       if (missing) return toast(missing, 'err');
       var btn=$('rsave'); btn.disabled=true; btn.innerHTML='Saving…';
       api('techRating', { token:S.token, key:S.key, stars:stars,
-                          why: Object.keys(why),
+                          why: ($('rwhy')||{value:''}).value,
                           tips: ($('rtips')||{value:''}).value,
                           note: ($('rnote')||{value:''}).value,
                           mustKnow: ($('rmk')||{value:''}).value,
@@ -2785,7 +2791,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '81b35de3a2ca';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '690df3b52fbc';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
