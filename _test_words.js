@@ -1,0 +1,134 @@
+/* ══════════════════════ THE WORDS TEST ══════════════════════
+ *
+ * Trung, 17 August: 'the language of the reminder is robotic, again I told you to remove
+ * unnecessary sub header, and use 5th grade writing, and be direct, why cant you stop you
+ * using litotes? Merlin, lock this shit down do not make the same mistake again, AND I MEAN
+ * NEVER LET IT HAPPEN AGAIN.'
+ *
+ * He had told me before. A promise is not a control — this is. It reads every string either
+ * app puts on a screen and fails the build on the four things he has now asked for more than
+ * once. Comments are exempt: they are for whoever maintains this, not for the salon.
+ */
+const fs = require('fs'), path = require('path');
+const APPS = path.join(__dirname, '..');
+const FILES = ['artonus-myday-web/index.html', 'artonus-client-book/index.html'];
+
+let pass = 0, fail = 0;
+const bad = [];
+function check(name, fn) {
+  let r; try { r = fn(); } catch (e) { r = 'threw: ' + e.message; }
+  if (r === true) { pass++; console.log('  PASS  ' + name); }
+  else { fail++; console.log('  FAIL  ' + name + '  → ' + r); }
+}
+
+/* Strings a person actually reads. Comments stripped; class names, ids, selectors and event
+   names skipped — they are code that happens to be quoted. */
+function copy(file) {
+  let src = fs.readFileSync(path.join(APPS, file), 'utf8');
+  src = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const out = [];
+  const push = (t) => {
+    if (!/[a-z]{2}\s+[a-z]{2}/i.test(t)) return;          // not a sentence
+    /* A selector has selector CHARACTERS in it. This used to skip anything made only of word
+       characters and spaces — which is every plain English sentence without punctuation, i.e.
+       exactly the headings this file exists to police. It passed a regression I had put in on
+       purpose, which is the only reason I found it. */
+    if (/[.#\[\]>]/.test(t) && !/[.!?]$/.test(t) && t.split(/\s+/).length <= 4) return;
+    if (/^[a-z]+(-[a-z]+)*$/i.test(t)) return;            // one bare token: a class or a key
+    if (/^(data-|aria-|http|image\/|text\/|application\/)/.test(t)) return;
+    out.push(t);
+  };
+  (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).forEach((m) => push(m.slice(1, -1)));
+  (src.match(/"(?:[^"\\\n]|\\.)*"/g) || []).forEach((m) => push(m.slice(1, -1)));
+  return out;
+}
+const words = (t) => t.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/g, ' ')
+                      .replace(/\s+/g, ' ').trim();
+
+/* ── 1. NO LITOTES. Saying a thing by denying its opposite. ── */
+const LITOTES = [
+  /\bnot just\b/i, /\bnot only\b/i, /\bnot merely\b/i, /\bno small\b/i,
+  /\bnot un\w+/i, /\bnever without\b/i, /\bnot without\b/i, /\bis not a\b/i,
+  /\bare not the\b/i, /\bnothing is more\b/i, /\bnot the only\b/i,
+];
+check('⭐ no litotes anywhere a person can read it', () => {
+  const hits = [];
+  FILES.forEach((f) => copy(f).forEach((t) => {
+    const w = words(t);
+    LITOTES.forEach((re) => { if (re.test(w)) hits.push(f.split('/')[0] + ': ' + w.slice(0, 90)); });
+  }));
+  return hits.length === 0 || hits.length + ' found — ' + hits.slice(0, 4).join(' | ');
+});
+
+/* ── 2. NO EXPLANATORY SUB-HEADER. A heading followed immediately by a paragraph explaining
+       the heading. He has asked for this three times. ── */
+check('⭐ no heading is followed by a paragraph explaining itself', () => {
+  const hits = [];
+  FILES.forEach((f) => {
+    let src = fs.readFileSync(path.join(APPS, f), 'utf8')
+                .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    src = src.replace(/\s*\+\s*/g, '');                    // join concatenated markup
+    /* STATIC prose only. A paragraph that carries a live value — an error message, a count,
+       a loading line — is the card's CONTENT, not a gloss on its own heading. The smell he
+       keeps crossing out is a fixed sentence explaining a fixed heading. */
+    /* A dynamic heading is built from a ternary, so allow a longer run between the tags; and
+       joining the concatenation leaves a RUN of quote characters, not one. Both of those let
+       the exact sentence Trung objected to slip straight through the first version.
+
+       AND THE `s` FLAG. Markup here is built across several lines, so a heading or a
+       paragraph regularly contains a newline — and without dotAll the pattern stops dead at
+       it. That alone let his sentence through a second time, after I had already widened
+       everything else. Both misses were found by putting the real regression back and
+       watching the test pass, which is the only way to know a guard guards anything. */
+    const re = /<h3>(?:(?!<\/h3>).){3,300}<\/h3>(?:['"\s]{0,8})<p class="(?:lede|hint)"[^>]*>((?:(?!<\/p>).){0,400}?)<\/p>/gs;
+    let m; while ((m = re.exec(src))) {
+      const body = m[1];
+      if (/esc\(|\$\{/.test(body)) continue;                 // a live value, not a gloss
+
+      /* LENGTH, NOT JUDGEMENT. Whether a line is 'necessary' is an argument; whether it is a
+         paragraph is a fact. A short line under a heading tells her what to do next and earns
+         its place — 'Tap when they sit down.' The ones Trung keeps striking out are the ones
+         that go on: the reminder's was twenty-four words explaining a heading that had already
+         said it. Sixteen is the line. */
+      const n = words(body).split(/\s+/).filter(Boolean).length;
+      if (n <= 16) continue;
+      hits.push(f.split('/')[0] + ': ' + n + 'w under "'
+                + words(m[0]).replace(/^<h3>/, '').split('<')[0].slice(0, 40) + '"');
+    }
+  });
+  return hits.length === 0 || hits.length + ' found — ' + hits.slice(0, 3).join(' | ');
+});
+
+/* ── 3. PLAIN WORDS. The ones he has actually crossed out. ── */
+const STIFF = {
+  'straight away': 'right away', 'at once': 'right away', 'the moment you': 'when you',
+  'is recorded': 'is saved', 'append-only': 'nothing is deleted', 'superseded': 'replaced',
+  'acknowledge': 'read', 'outstanding': 'still needed', 'per visit': 'this visit',
+  'writing up': 'notes', 'reaches ': 'goes ', 'in order to': 'to', 'utilise': 'use',
+  'commence': 'start', 'prior to': 'before', 'subsequent': 'next', 'deliberately': '',
+};
+check('⭐ none of the words he has crossed out have come back', () => {
+  const hits = [];
+  FILES.forEach((f) => copy(f).forEach((t) => {
+    const w = words(t).toLowerCase();
+    Object.keys(STIFF).forEach((k) => {
+      if (w.indexOf(k) >= 0) hits.push(f.split('/')[0] + ': "' + k + '" in ' + w.slice(0, 70));
+    });
+  }));
+  return hits.length === 0 || hits.length + ' found — ' + hits.slice(0, 4).join(' | ');
+});
+
+/* ── 4. SHORT SENTENCES. A screen is read standing up, one-handed, mid-service. ── */
+check('⭐ no sentence on a screen runs past 22 words', () => {
+  const hits = [];
+  FILES.forEach((f) => copy(f).forEach((t) => {
+    words(t).split(/(?<=[.!?])\s+/).forEach((sent) => {
+      const n = sent.trim().split(/\s+/).filter(Boolean).length;
+      if (n > 22) hits.push(f.split('/')[0] + ': ' + n + 'w — ' + sent.slice(0, 80));
+    });
+  }));
+  return hits.length === 0 || hits.length + ' found — ' + hits.slice(0, 3).join(' | ');
+});
+
+console.log('\n  ' + pass + ' passed · ' + fail + ' failed\n');
+process.exit(fail ? 1 : 0);

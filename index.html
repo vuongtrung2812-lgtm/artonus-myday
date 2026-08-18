@@ -568,8 +568,7 @@ function dropToken(){ try{ localStorage.removeItem('artonus_chair'); }catch(e){}
 function viewEnrol(){
   paintInto('app', head('Technician access')
     + '<div class="card"><h3>Join with your code</h3>'
-    + '<p class="lede">The front desk gives you a code. It works once, for this phone, '
-    + 'and stops working after a day.</p>'
+    + '<p class="lede">Ask the front desk for a code.</p>'
     + '<input class="in" id="code" type="text" inputmode="latin" autocapitalize="characters" '
     + 'autocomplete="off" maxlength="9" placeholder="8-character code" style="text-align:center;'
     + 'font-size:22px;letter-spacing:5px;font-weight:900">'
@@ -685,14 +684,13 @@ function viewToday(){
      now — the day rolls and the visit is gone from this screen for good. */
   var owed = unwritten();
   if (owed.length){
-    h += '<div class="card owed"><h3>' + (owed.length === 1 ? 'One visit still needs writing up'
-                                                            : owed.length + ' visits still need writing up') + '</h3>'
-      + '<p class="lede">The photos are saved. The rating and the notes are not — and they are '
-      + 'what the next technician reads.</p>'
+    h += '<div class="card owed"><h3>'
+      + (owed.length === 1 ? 'Add notes for 1 visit' : 'Add notes for ' + owed.length + ' visits')
+      + '</h3>'
       + owed.map(function(v){
           return '<button class="owedrow" onclick="openVisit(\''+esc(v.key)+'\')">'
             + '<span><b>'+esc(v.name)+'</b>'+(v.at?' · '+esc(v.at):'')+'</span>'
-            + '<span class="go">Write it up</span></button>'; }).join('')
+            + '<span class="go">Add notes</span></button>'; }).join('')
       + '</div>';
   }
   if (!S.visits.length){
@@ -706,7 +704,7 @@ function viewToday(){
       var tag = v.state==='in service' ? '<span class="tag serv">in service</span>'
               : v.state==='almost done' ? '<span class="tag serv">almost done</span>'
               : v.state==='finished' ? (v.rated ? '<span class="tag done">finished</span>'
-                                                : '<span class="tag owe">needs writing up</span>')
+                                                : '<span class="tag owe">needs notes</span>')
               : '<span class="tag book">booked</span>';
       h += '<div class="visit" onclick="openVisit(\''+esc(v.key)+'\')">'
         + '<div class="t">'+esc(v.at||'')+'</div><div style="flex:1;min-width:0">'
@@ -2872,7 +2870,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'ab5227261d7e';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'ba251ea09c64';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
