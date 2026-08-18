@@ -660,7 +660,7 @@ function viewToday(){
   var h = head('Today · '+esc(S.tech));
   h += changesHtml();
   if (!S.visits.length){
-    h += '<div class="card"><h3>Nothing in your chair yet</h3>'
+    h += '<div class="card"><h3>Nobody yet</h3>'
       + '<p class="lede">When the front desk books or walks someone in for you, they appear here.</p></div>';
   } else {
     /* Inside the else, not above the guard: "Booked at your chair · 0" over "Nothing in your
@@ -775,7 +775,7 @@ function openVisit(key){
 function viewVisit(){
   var v = S.visit;
   if (!v) { S.view='today'; return render(); }
-  var h = head('Their card');
+  var h = head('Their profile');
   h += '<button class="skip" onclick="S.view=\'today\';render()" style="margin-bottom:10px">'
      + ICON.back+' Today</button>';
 
@@ -805,13 +805,13 @@ function viewVisit(){
      change, a finish button for something already finished. */
   var rated = !!(S.rated || (S.card && S.card.rated));
   if (v.state === 'booked'){
-    h += '<div class="card"><h3>They are not in the chair yet</h3>'
-      + '<p class="lede">Tap when they sit down. The front desk sees it straight away.</p>'
-      + '<button class="btn" id="seat">They are in the chair</button></div>';
+    h += '<div class="card"><h3>Not seated yet</h3>'
+      + '<p class="lede">Tap when they sit down. The front desk sees it right away.</p>'
+      + '<button class="btn" id="seat">They are seated</button></div>';
   } else if (v.state === 'finished' && rated){
     /* Nothing to do, and it says so once instead of showing twelve controls that cannot. */
     h += '<div class="card done"><h3>All done</h3>'
-      + '<p class="lede">Everything is on their card. Nothing left to send.</p></div>';
+      + '<p class="lede">It is all saved. Nothing left to send.</p></div>';
   } else {
     h += chairCard(v);
   }
@@ -842,7 +842,7 @@ function chairCard(v){
      So: the before photo leads ONLY while it is missing, then gets out of the way. Time comes
      first for the rest of the visit. Everything that belongs to the end is under one heading
      at the end. */
-  var h = '<div class="card"><h3>In the chair</h3>';
+  var h = '<div class="card"><h3>Session</h3>';
   var got = (S.card && S.card.photos) || {};
   /* ══ THE ROW DOES NOT MOVE DURING A VISIT ═════════════════════════════════════════════
      This was `!got['Before']`, read fresh on every render — so the moment the before photo
@@ -972,7 +972,7 @@ function cardHtml(){
   if (v.nameOnly) return '';
   var c = S.card;
   if (!c) return '<div class="card"><p class="lede">'
-    + (S.cardErr ? esc(S.cardErr) : 'Opening their card&hellip;') + '</p></div>';
+    + (S.cardErr ? esc(S.cardErr) : 'Opening their profile&hellip;') + '</p></div>';
 
   var h = '';
   /* WHAT SHE ASKED FOR, first. The alert says this is "on her card" and until now it was
@@ -1029,7 +1029,7 @@ function cardHtml(){
      worked on — and the heading said Must-knows, which is the red cards above. So a client
      with no standing chips showed an empty box titled Must-knows directly under a real
      must-know, which reads as one going missing. */
-  h += '<div class="card"><h3>Stays on their card</h3><div class="chips">'
+  h += '<div class="card"><h3>In their profile</h3><div class="chips">'
     + ((c.standing||[]).length ? c.standing.map(function(t){ return '<span class="c">'+esc(t)+'</span>'; }).join('')
        : '<span class="quiet">Nothing yet.</span>')
     + '</div>';
@@ -1887,7 +1887,7 @@ function openRating(){
       + (mkVal.trim()
           ? '<button type="button" class="rchip' + (mkCls === 'allergy' ? ' on' : '') + '" '
             + 'id="rmkallergy" style="margin-bottom:var(--s1)">This is an allergy or reaction</button>'
-            + '<p class="hint" style="margin:-2px 0 var(--s2)">It stays on their card until '
+            + '<p class="hint" style="margin:-2px 0 var(--s2)">It stays in their profile until '
             + 'somebody takes it off, and every technician is asked to tap <b>I&rsquo;ve read '
             + 'this</b>.' + (mkCls === 'allergy' ? ' An allergy also shows in red at the top.' : '')
             + '</p>'
@@ -2287,7 +2287,7 @@ function askHelp(){
   HELP_PICK = '';
   $('veil').className = 'veil on';
   $('veil').innerHTML = '<div class="alert"><h3>What do you need?</h3>'
-    + '<p class="lede">Pick one, or write it. The front desk sees this the moment you send it.</p>'
+    + '<p class="lede">Pick one, or write your own. The front desk sees it right away.</p>'
     + '<div class="chips" id="helpchips">'
     + HELP_CHIPS.map(function(r){
         return '<button class="c pick" data-help="'+esc(r)+'">'+esc(r)+'</button>'; }).join('')
@@ -2431,9 +2431,9 @@ function evText(e){
                        + (p.toPrice ? ' ' + ba(money(p.fromPrice), money(p.toPrice)) : '');
     /* Print the brief itself. "It is on her card" made her go and look, mid-service, for
        something that could have been in front of her. */
-    case 'DESIGN_BRIEF': return nm+' wants <b>'+esc(p.text||'a design — see their card')+'</b>'
+    case 'DESIGN_BRIEF': return nm+' wants <b>'+esc(p.text||'a design — see their profile')+'</b>'
                        + (p.photos ? ' <span class="quiet">('+p.photos+' photo'
-                          +(p.photos>1?'s':'')+' on their card)</span>' : '');
+                          +(p.photos>1?'s':'')+' in their profile)</span>' : '');
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
     /* The desk finishing something she asked for. The row carries ids, not words, so the
        words are looked up in the list the poll already handed us — the desk does not repeat
@@ -2812,7 +2812,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '6dec67e166a4';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'bf06ae556853';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
