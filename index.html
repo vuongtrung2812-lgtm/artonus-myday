@@ -2427,6 +2427,8 @@ function clearHelp(){
 
 /* ─────────────────────────── alerts ─────────────────────────── */
 var FEED = [];
+/* Help closures already announced, by event id — see deskClosedHelp. */
+var HELP_TOLD = {};
 function unseen(){ return FEED.filter(function(e){ return !S.seen[e.id]; }); }
 function evText(e){
   var p = e.payload||{}, nm = '<b>'+esc(visitName(e.rowKey))+'</b>';
@@ -2478,19 +2480,27 @@ function visitName(rowKey){
  * several times an hour, and a pop-up each time is how an alert stops being read at all —
  * the one that matters then gets dismissed with the rest. Seen shows up quietly on her card,
  * against the item. Only DONE interrupts her, because only done ends the question. */
+/* A PREDICATE, AND NOTHING ELSE.
+ *
+ * Trung, 17 August: 'if she reload the page, that notification will show again without
+ * context.'
+ *
+ * This used to announce the desk closing her request from INSIDE the filter. A filter runs
+ * over whatever it is handed — and on a reload that is the whole day, from the beginning, so
+ * a request closed at ten in the morning was announced again at four in the afternoon with
+ * nothing on screen to explain it. Deciding what belongs in her feed and telling her about it
+ * are two different jobs; only the second one cares whether the news is new. */
 function mine(e){
-  /* SHE IS TOLD WHEN THE DESK CLOSES IT FOR HER. The desk can now mark a request "taken care
-     of" — because the person least likely to remember to close it is the one whose hands are
-     back in a client's. Her red bar would otherwise just vanish, which is the same "did that
-     work?" question from the other direction. A toast, not an alert: nothing is needed from
-     her, and the thing she asked for has already happened. */
-  if (e.type === 'HELP_CLEAR' && (e.payload || {}).how === 'desk' && e.who !== S.tech){
-    toast(e.who + ' marked it taken care of.', null, ICON.check);
-    return false;
-  }
   if (e.who === S.tech || e.type.indexOf('HELP') === 0) return false;
   if (e.type === 'SIGNAL_ACK') return ((e.payload||{}).state === 'done');
   return true;
+}
+
+/* The desk marking her request taken care of. Not kept in the feed — nothing is needed from
+   her and the thing she asked for has already happened — so it is announced once, live, and
+   never again. */
+function deskClosedHelp(e){
+  return e.type === 'HELP_CLEAR' && (e.payload || {}).how === 'desk' && e.who !== S.tech;
 }
 
 /* ══════════════════ THREE CHANGES ARE ONE CHANGE ══════════════════
@@ -2823,7 +2833,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '39669d55cc98';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '733378b2a00c';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -2917,7 +2927,7 @@ setInterval(checkBuild, 180000);
  */
 function absorb(r, quiet){
   if (r && r.date && S.day && r.date !== S.day){
-    S.cursor = 0; FEED.length = 0; S.seen = {}; S.shownIds = [];
+    S.cursor = 0; FEED.length = 0; S.seen = {}; S.shownIds = []; HELP_TOLD = {};
     S.day = r.date;
     return true;                  // caller refetches; next time round S.day matches, so once only
   }
@@ -2929,7 +2939,18 @@ function absorb(r, quiet){
   var have = {};
   FEED.forEach(function(e){ have[e.id] = 1; });
 
-  var fresh = (r && r.events ? r.events : []).filter(mine).filter(function(e){ return !have[e.id]; });
+  var all = (r && r.events ? r.events : []);
+
+  /* ANNOUNCED ONCE, AND ONLY WHILE SHE IS WATCHING. `quiet` is the catch-up read — a reload,
+     or the app being opened — where everything before now is history. Marked seen either way,
+     so a poll that overlaps a doorbell cannot say it twice. */
+  all.forEach(function(e){
+    if (!deskClosedHelp(e) || HELP_TOLD[e.id]) return;
+    HELP_TOLD[e.id] = true;
+    if (!quiet) toast(e.who + ' marked it taken care of.', null, ICON.check);
+  });
+
+  var fresh = all.filter(mine).filter(function(e){ return !have[e.id]; });
   fresh.forEach(function(e){
     FEED.push(e);
     if (quiet) S.seen[e.id] = true;     // already history when she opened the app
