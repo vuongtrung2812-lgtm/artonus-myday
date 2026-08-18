@@ -157,6 +157,15 @@
   .kind.on{border-color:var(--gold);background:var(--gold-soft)}
   .kind.warn.on{border-color:var(--err);background:var(--err-soft)}
   .kind.warn.on b{color:var(--err)}
+  /* A visit finished and never written up. Gold, not red: nothing is wrong, something is owed. */
+  .card.owed{background:var(--gold-soft);border-color:var(--gold)}
+  .card.owed h3{color:var(--espresso)}
+  .owedrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;
+    margin-top:var(--s1);padding:11px 13px;border:1px solid var(--gold);border-radius:12px;
+    background:var(--card);font-family:inherit;font-size:14px;color:var(--ink);text-align:left;
+    min-height:var(--tap,48px);cursor:pointer}
+  .owedrow .go{font-size:12px;font-weight:900;color:var(--gold);white-space:nowrap}
+  .tag.owe{background:var(--gold-soft);color:var(--espresso);border:1px solid var(--gold)}
   /* The visit is closed. Quiet and green, not another thing to act on. */
   .card.done{background:var(--ok-soft);border-color:var(--ok)}
   .card.done h3{color:var(--ok)}
@@ -656,9 +665,36 @@ function changesHtml(){
     + '</div>';
 }
 
+/* Finished, and nobody has written it up. The photographs are already saved — they go as they
+   are taken — but the rating, the booking tips, the note and any must-know are all written in
+   the one moment she rates. Walk away and the salon keeps the pictures and loses the words. */
+function unwritten(){
+  return (S.visits || []).filter(function(v){
+    return v.state === 'finished' && !v.rated;
+  });
+}
+
 function viewToday(){
   var h = head('Today · '+esc(S.tech));
   h += changesHtml();
+
+  /* ══ THE REMINDER ═════════════════════════════════════════════════════════════════════
+     It names them and takes one tap to fix, because a reminder that only nags is a reminder
+     people learn to scroll past. Not a pop-up: she may be mid-service with someone else, and
+     the write-up can wait ten minutes. It cannot wait until tomorrow, which is what happens
+     now — the day rolls and the visit is gone from this screen for good. */
+  var owed = unwritten();
+  if (owed.length){
+    h += '<div class="card owed"><h3>' + (owed.length === 1 ? 'One visit still needs writing up'
+                                                            : owed.length + ' visits still need writing up') + '</h3>'
+      + '<p class="lede">The photos are saved. The rating and the notes are not — and they are '
+      + 'what the next technician reads.</p>'
+      + owed.map(function(v){
+          return '<button class="owedrow" onclick="openVisit(\''+esc(v.key)+'\')">'
+            + '<span><b>'+esc(v.name)+'</b>'+(v.at?' · '+esc(v.at):'')+'</span>'
+            + '<span class="go">Write it up</span></button>'; }).join('')
+      + '</div>';
+  }
   if (!S.visits.length){
     h += '<div class="card"><h3>Nobody yet</h3>'
       + '<p class="lede">When the front desk books or walks someone in for you, they appear here.</p></div>';
@@ -669,7 +705,8 @@ function viewToday(){
     S.visits.forEach(function(v){
       var tag = v.state==='in service' ? '<span class="tag serv">in service</span>'
               : v.state==='almost done' ? '<span class="tag serv">almost done</span>'
-              : v.state==='finished' ? '<span class="tag done">finished</span>'
+              : v.state==='finished' ? (v.rated ? '<span class="tag done">finished</span>'
+                                                : '<span class="tag owe">needs writing up</span>')
               : '<span class="tag book">booked</span>';
       h += '<div class="visit" onclick="openVisit(\''+esc(v.key)+'\')">'
         + '<div class="t">'+esc(v.at||'')+'</div><div style="flex:1;min-width:0">'
@@ -803,7 +840,9 @@ function viewVisit(){
      the rating is written and is showing on the card above. Leaving it up meant a screenful
      of live buttons on a visit that is over: time she cannot ask for, a service she cannot
      change, a finish button for something already finished. */
-  var rated = !!(S.rated || (S.card && S.card.rated));
+  /* v.rated comes from the day list, so a reload knows it without waiting for the card —
+     and a walk-in, which has no card at all, knows it too. */
+  var rated = !!(S.rated || v.rated || (S.card && S.card.rated));
   if (v.state === 'booked'){
     h += '<div class="card"><h3>Not seated yet</h3>'
       + '<p class="lede">Tap when they sit down. The front desk sees it right away.</p>'
@@ -2833,7 +2872,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '733378b2a00c';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'ab5227261d7e';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
