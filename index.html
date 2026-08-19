@@ -776,21 +776,17 @@ function can(k){ return S.caps.some(function(c){ return c.key===k && c.on; }); }
  * at two for someone shifted to half past three. Neither is a thing she can find out from a
  * list that quietly rearranged itself.
  */
-function changesHtml(){
-  var ch = S.changes || [];
-  if (!ch.length) return '';
-  return '<div class="changes">'
-    + ch.map(function(c){
-        var who = '<b>'+esc(c.name || 'A client')+'</b>';
-        return '<div class="chg">' + (c.type === 'CANCELED'
-          ? ICON.close + '<div>' + who + ' at ' + esc(c.was || '—') + ' <b>cancelled</b>'
-            + (c.svc ? ' <span class="quiet">· '+esc(c.svc)+'</span>' : '') + '</div>'
-          : ICON.clock + '<div>' + who + ' moved <span class="was">' + esc(c.was || '—')
-            + '</span><span class="arrow">→</span><b>' + esc(c.now || '—') + '</b></div>')
-          + '</div>';
-      }).join('')
-    + '</div>';
-}
+/* THE CHANGE BANNERS ARE GONE. Trung, 19 August: "I think these are annoying and ugly so
+   remove them."
+
+   They stacked up at the top of the day and pushed the actual clients down the screen, and
+   the worst of it was that they never resolved: Matthew moved 3:30 -> 4:00 and then 4:00 ->
+   3:30, and BOTH banners sat there, so the technician read two contradictory notices about a
+   change that had cancelled itself out. The board rows underneath already carry the truth —
+   the time each client is coming, right now — which is the only version worth reading.
+
+   S.changes still rides the poll and the desk still shows its own view of the day; nothing
+   here is deleted server-side. */
 
 /* Finished, and nobody has written it up. The photographs are already saved — they go as they
    are taken — but the rating, the booking tips, the note and any must-know are all written in
@@ -803,7 +799,6 @@ function unwritten(){
 
 function viewToday(){
   var h = head('Today · '+esc(S.tech));
-  h += changesHtml();
 
   /* ══ THE REMINDER ═════════════════════════════════════════════════════════════════════
      It names them and takes one tap to fix, because a reminder that only nags is a reminder
@@ -2868,6 +2863,11 @@ function evText(e){
                        + (p.photos ? ' <span class="quiet">('+p.photos+' photo'
                           +(p.photos>1?'s':'')+' in their profile)</span>' : '');
     case 'DESK_NOTE':  return nm+' — <b>'+esc(p.text||'a note from the front desk')+'</b>';
+    /* The desk moving a time. She has to be TOLD, not left to notice the row changed —
+       Trung, 19 August: "when the appointment time move, the technician should be notified." */
+    case 'TIME_MOVED': return nm+' moved to <b>'+esc(p.to||'a new time')+'</b>'
+                       + (p.from ? ' <span class="quiet">(was '+esc(p.from)+')</span>' : '')
+                       + (p.why ? ' — '+esc(p.why) : '');
     /* The desk finishing something she asked for. The row carries ids, not words, so the
        words are looked up in the list the poll already handed us — the desk does not repeat
        them on the wire and the two sides cannot drift apart in how they name a signal. */
@@ -3253,7 +3253,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '3c5886cceb85';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = '2ab95c543cf8';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
