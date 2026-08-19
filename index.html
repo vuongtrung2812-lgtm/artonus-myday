@@ -569,7 +569,8 @@ var LOGO = 'https://static.wixstatic.com/media/1193d9_5794966292134434911d79c3d3
 
 var S = { view:'boot', token:'', tech:'', chair:'', visits:[], help:null, caps:[], busy:{}, mtDraft:'',
           card:null, thumbs:null, missing:null, seatMode:true, tab:'session', rated:false,
-          key:null, visit:null, cursor:0, seen:{}, shownIds:[], busy:false, session:0, day:'' };
+          key:null, visit:null, cursor:0, seen:loadSeen(), shownIds:[], busy:false,
+          session:0, day:'' };
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
@@ -689,6 +690,36 @@ function opId(kind){
 /* The token lives on the phone and nowhere else. localStorage rather than a cookie: it is
    never sent anywhere except in the calls above. */
 function saveToken(t){ try{ localStorage.setItem('artonus_chair', t); }catch(e){} }
+
+/**
+ * WHICH ALERTS SHE HAS ALREADY READ, kept on the phone.
+ *
+ * S.seen lived only in memory, so every reload made every alert new again: she pressed Got
+ * it, the app reloaded — for an update, a dropped connection, or just being reopened — and
+ * the same pop-up came back carrying things she had dealt with an hour earlier. An alert that
+ * returns after you have answered it is one you stop reading.
+ *
+ * The newest 400 ids, which is far more than a day produces and small enough that the write
+ * costs nothing. Anything older has scrolled out of the feed anyway.
+ */
+var SEEN_KEY = 'artonus_seen', SEEN_MAX = 400;
+function loadSeen(){
+  try {
+    var raw = localStorage.getItem(SEEN_KEY);
+    if (!raw) return {};
+    var out = {}, ids = JSON.parse(raw);
+    if (!ids || !ids.length) return {};
+    ids.forEach(function(id){ out[id] = true; });
+    return out;
+  } catch (e) { return {}; }
+}
+function saveSeen(){
+  try {
+    var ids = Object.keys(S.seen || {});
+    if (ids.length > SEEN_MAX) ids = ids.slice(ids.length - SEEN_MAX);
+    localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+  } catch (e) {}
+}
 function loadToken(){ try{ return localStorage.getItem('artonus_chair')||''; }catch(e){ return ''; } }
 function dropToken(){ try{ localStorage.removeItem('artonus_chair'); }catch(e){} }
 
@@ -820,9 +851,9 @@ function viewToday(){
     h += '<div class="card"><h3>Nobody yet</h3>'
       + '<p class="lede">When the front desk books or walks someone in for you, they appear here.</p></div>';
   } else {
-    /* Inside the else, not above the guard: "Booked at your chair · 0" over "Nothing in your
+    /* Inside the else, not above the guard: "Booked with you · 0" over "Nothing in your
        chair yet" is two contradictory sentences. */
-    h += '<div class="lbl">Booked at your chair · '+S.visits.length+'</div>';
+    h += '<div class="lbl">Booked with you \u00b7 '+S.visits.length+'</div>';
     S.visits.forEach(function(v){
       var tag = v.state==='in service' ? '<span class="tag serv">in service</span>'
               : v.state==='almost done' ? '<span class="tag serv">almost done</span>'
@@ -2846,7 +2877,7 @@ var FEED = [];
 var HELP_TOLD = {};
 function unseen(){ return FEED.filter(function(e){ return !S.seen[e.id]; }); }
 function evText(e){
-  var p = e.payload||{}, nm = '<b>'+esc(visitName(e.rowKey))+'</b>';
+  var p = e.payload||{}, nm = '<b>'+esc(visitName(e.rowKey, p.client))+'</b>';
   function ba(was,now){ return '<span class="ba">'+(was?'<span class="was">'+esc(was)+'</span><span class="arrow">→</span>':'')
     + '<b>'+esc(now)+'</b></span>'; }
   switch(e.type){
@@ -2890,9 +2921,17 @@ function ackLabels(ids){
   return out.map(esc).join(', ');
 }
 /* Events carry the hashed handle, not the raw key — so match on that. */
-function visitName(rowKey){
+/**
+ * Whose visit this is. The fallback said "Your chair" — a word for a SEAT, used for a PERSON,
+ * which is the exact thing Trung had already had removed everywhere else. It surfaced again
+ * here because this line is a fallback: it only shows when the visit is not in the list the
+ * poll last handed us, which is precisely the case for a client the desk has just moved.
+ *
+ * The event carries the client's own name for that reason. Use it.
+ */
+function visitName(rowKey, fallback){
   var v = S.visits.filter(function(x){ return x.rowKey === rowKey; })[0];
-  return v ? v.name : 'Your chair';
+  return (v && v.name) || fallback || 'This client';
 }
 /* Only what the DESK sent her. Her own signals coming back would alert her about herself.
  *
@@ -2966,7 +3005,7 @@ function groupBatches(list){
 /* One sentence for the whole batch: what she is doing now, everything added, and the money
    from where it started to where it ended. */
 function batchText(g){
-  var nm = '<b>'+esc(visitName(g.rowKey))+'</b>';
+  var nm = '<b>'+esc(visitName(g.rowKey, (g.payload||{}).client))+'</b>';
   var svc = null, adds = [], from = null, to = null;
   g.parts.forEach(function(e){
     var p = e.payload || {};
@@ -3009,6 +3048,7 @@ function paintAlert(){
    pending and the card simply stays open with it. Nothing can be marked read unread. */
 function ackShown(){
   S.shownIds.forEach(function(id){ S.seen[id] = true; });
+  saveSeen();
   paintAlert(); refreshBell(); render();
 }
 function openBell(){
@@ -3060,7 +3100,7 @@ document.addEventListener('keydown', function(e){
   if (e.key !== 'Escape' && e.key !== 'Esc') return;
   if (tryShutVeil()) e.preventDefault();
 });
-function ackAll(){ FEED.forEach(function(e){ S.seen[e.id]=true; }); shutVeil(); refreshBell(); render(); }
+function ackAll(){ FEED.forEach(function(e){ S.seen[e.id]=true; }); saveSeen(); shutVeil(); refreshBell(); render(); }
 function refreshBell(){
   var el = document.querySelector('.bellcount'); if (!el) return;
   var n = unseen().length; el.textContent = n||''; el.style.display = n?'flex':'none';
@@ -3253,7 +3293,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = '2ab95c543cf8';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'c0d0030fc0aa';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
@@ -3347,7 +3387,10 @@ setInterval(checkBuild, 180000);
  */
 function absorb(r, quiet){
   if (r && r.date && S.day && r.date !== S.day){
+    /* A new day starts clean, and the phone is told so — otherwise yesterday's ids sit
+       in storage for ever. */
     S.cursor = 0; FEED.length = 0; S.seen = {}; S.shownIds = []; HELP_TOLD = {};
+    saveSeen();
     S.day = r.date;
     return true;                  // caller refetches; next time round S.day matches, so once only
   }
@@ -3375,6 +3418,7 @@ function absorb(r, quiet){
     FEED.push(e);
     if (quiet) S.seen[e.id] = true;     // already history when she opened the app
   });
+  if (quiet) saveSeen();
   if (r && r.cursor) S.cursor = r.cursor;
 
   /* Hot only for things SOMEBODY ELSE did. Her own tap already refreshed the screen, and

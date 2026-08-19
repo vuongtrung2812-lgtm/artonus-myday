@@ -122,6 +122,17 @@ const STIFF = {
   'acknowledge': 'read', 'outstanding': 'still needed', 'per visit': 'this visit',
   'writing up': 'notes', 'reaches ': 'goes ', 'in order to': 'to', 'utilise': 'use',
   'commence': 'start', 'prior to': 'before', 'subsequent': 'next', 'deliberately': '',
+  /* A CHAIR IS FURNITURE. Trung had every use of "chair" for a PERSON replaced on 17 August,
+     and it came back on 19 August in a fallback string — "Your chair moved to 5:15 PM" —
+     because a fallback only shows in the one case nobody tests. He should not have to say it
+     a third time.
+
+     "Chair 3" and "in the chair" are about the seat and stay. These are the forms that mean
+     a human being. */
+  'your chair': 'the client', 'tell the chair': 'tell the technician',
+  'ask the chair': 'ask the technician', 'the chair sees': 'the technician sees',
+  'the chair will': 'the technician will', 'the chair is waiting': 'the technician is waiting',
+  'chair\u2019s phone': 'technician\u2019s phone', "chair's phone": "technician's phone",
 };
 check('⭐ none of the words he has crossed out have come back', () => {
   const hits = [];
