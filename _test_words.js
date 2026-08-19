@@ -217,6 +217,24 @@ check('\u2b50 American spelling, everywhere a person reads it', () => {
   return found.length ? found.length + ' found - ' + found.slice(0, 4).join(' | ') : true;
 });
 
+/* ── A TOAST DRAWS ITS OWN ICON ──────────────────────────────────────────────────────────
+ *
+ * toast() escapes its argument, so `toast(ICON.check + ' Saved')` prints
+ * `<svg viewBox="0 0 24 24">…` into the bar as literal text. This shipped once on 18 August,
+ * was fixed, and I reintroduced it in a new handler the very next day. A comment did not stop
+ * it; this does. */
+check('\u2b50 no toast is handed an icon to print as text', () => {
+  const hits = [];
+  FILES.forEach((f) => {
+    const src = fs.readFileSync(path.join(APPS, f), 'utf8');
+    const re = /toast\s*\(\s*ICON\./g;
+    let m;
+    while ((m = re.exec(src))) hits.push(f.split('/')[0] + ':' + src.slice(0, m.index).split('\n').length);
+  });
+  return hits.length === 0
+    || hits.length + ' toast(ICON.…) — toast draws its own icon: ' + hits.join(', ');
+});
+
 check('\u2b50 every icon a screen asks for actually exists', () => {
   /* THE THIRD TIME THIS HAS SHIPPED. ICON.clock on the desk printed the literal word
      "undefined" in front of every booking tip; ICON.book on the phone printed it in front of

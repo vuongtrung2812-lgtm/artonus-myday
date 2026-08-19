@@ -3207,11 +3207,41 @@ function pollMs(){ return ES ? 300000 : POLL_MS; }             // a live channel
  * still follows and replaces whatever this drew — it is a preview like every other one here,
  * and it lives on S.help which the poll rebuilds, so it can never become the record.
  */
+/**
+ * ACT ON THE RING ITSELF.
+ *
+ * This returned immediately unless a help request was open — `!S.help` — so every OTHER kind
+ * of change fell through to "something happened, go and read the whole day back". That second
+ * round trip is the delay: she waits for the bell (about a second), then waits again for the
+ * answer (about another) before her screen moves.
+ *
+ * Anything the ring carries enough detail to apply is applied here and now. The authoritative
+ * read still lands a moment later and quietly agrees.
+ */
 function applyNews(news, since){
-  if (!news || !news.length || !S.help) return;
+  if (!news || !news.length) return;
   var changed = false;
   news.forEach(function(x){
     if (Number(x.n) <= Number(since)) return;                 // already seen
+
+    /* THE DESK MOVED A TIME. The new time is in the ring, so there is nothing to go and
+       fetch — the row moves as the bell arrives. */
+    if (x.type === 'TIME_MOVED' && x.rowKey && x.to){
+      (S.visits || []).forEach(function(v){
+        if (v.rowKey !== x.rowKey) return;
+        v.movedFrom = v.movedFrom || x.from || v.at;
+        v.at = x.to; v.movedTo = x.to;
+        changed = true;
+      });
+      if (S.visit && S.visit.rowKey === x.rowKey){
+        S.visit.movedFrom = S.visit.movedFrom || x.from || S.visit.at;
+        S.visit.at = x.to; S.visit.movedTo = x.to;
+        changed = true;
+      }
+      if (changed) sortVisits();
+    }
+
+    if (!S.help) return;
     /* EXACT MATCH, ALWAYS. Anything else is how a stale close takes down a request she has
        just raised: she closes one, immediately raises another, and the desk's close for the
        OLD id is still in flight. While hers is still 'pending' we have no id to compare, so
@@ -3224,6 +3254,22 @@ function applyNews(news, since){
     }
   });
   if (changed) render();
+}
+
+/** The day in time order, the same rule the server sorts by. */
+function sortVisits(){
+  (S.visits || []).sort(function(a, z){
+    var ka = timeKey(a.at), kz = timeKey(z.at);
+    if (ka !== kz) return ka - kz;
+    return String(a.at) < String(z.at) ? -1 : 1;
+  });
+}
+function timeKey(t){
+  var m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(t || '').trim());
+  if (!m) return Infinity;
+  var h = Number(m[1]) % 12;
+  if (/pm/i.test(m[3])) h += 12;
+  return h * 60 + Number(m[2]);
 }
 
 var TICKT = null, TICK_MS = 1200, LAST_TICK = -1, TICKFAIL = 0, TICK_ON = true;
@@ -3293,7 +3339,7 @@ document.addEventListener('visibilitychange', function(){
  * endless loop on a phone somebody is trying to work from. Two tries, then it stops and says
  * plainly what to do.
  */
-var BUILD = 'c0d0030fc0aa';                  /* stamped by _stamp_build.py — never edit by hand */
+var BUILD = 'b71521e8c237';                  /* stamped by _stamp_build.py — never edit by hand */
 var PENDING_BUILD = '', UPDT = null;
 
 function buildTried(b){
